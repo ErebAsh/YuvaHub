@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "uditt490@gmail.com" && request.auth.token.email_verified == true);
+    }
+    
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Collection: users
+    // ===============================================================
+    match /users/{userId} {
+      // Users can only read their own profile
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Users can create/update their own profile
+      allow create, update: if isOwner(userId) && 
+        request.resource.data.keys().hasAll(['location', 'age', 'interests', 'uid', 'email']) &&
+        request.resource.data.location is string &&
+        request.resource.data.age is number &&
+        request.resource.data.interests is list &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.email == request.auth.token.email;
+    }
+
+    // ===============================================================
+    // Collection: newsletter
+    // ===============================================================
+    match /newsletter/{email} {
+      // Anyone can subscribe
+      allow create: if isValidEmail(email) && 
+        request.resource.data.keys().hasAll(['email', 'subscribedAt']) &&
+        request.resource.data.email == email;
+        
+      // Only admin can see subscribers
+      allow read, update, delete: if isAdmin();
+    }
+  }
+}

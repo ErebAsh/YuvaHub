@@ -1,0 +1,5 @@
+{
+  "name": "EventHub & GovSchemes",
+  "description": "Discover corporate hackathons and government schemes tailored to your location and interests.",
+  "requestFramePermissions": ["geolocation"]
+}

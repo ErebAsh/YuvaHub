@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user preferences and profile information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "location": { "type": "string" },
+        "age": { "type": "number" },
+        "interests": { "type": "array", "items": { "type": "string" } },
+        "notificationsEnabled": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "location", "age", "interests"]
+    },
+    "NewsletterSubscriber": {
+      "title": "Newsletter Subscriber",
+      "description": "Stores email addresses for newsletter subscriptions.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "subscribedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "subscribedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile document indexed by Auth UID."
+    },
+    "/newsletter/{email}": {
+      "schema": "NewsletterSubscriber",
+      "description": "Newsletter subscription document indexed by email."
+    }
+  }
+}
