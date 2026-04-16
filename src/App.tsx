@@ -15,7 +15,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { fetchEventsAndSchemes } from './services/geminiService';
 import { Event, UserLocation, UserProfile, Notification } from './types';
 import { cn } from './lib/utils';
-import { auth, signInWithGoogle, logout, db } from './lib/firebase';
+import { auth, signInWithGoogle, signInWithApple, logout, db } from './lib/firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp, collection, addDoc, getDocs, query, orderBy } from 'firebase/firestore';
 import emailjs from '@emailjs/browser';
@@ -40,6 +40,7 @@ export default function App() {
   });
   const [loading, setLoading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isFallback, setIsFallback] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'hackathon' | 'scheme' | 'program'>('all');
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
@@ -54,6 +55,7 @@ export default function App() {
   const [fetchingSubscribers, setFetchingSubscribers] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showBookmarks, setShowBookmarks] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>(() => {
     const saved = localStorage.getItem('user_notifications');
     return saved ? JSON.parse(saved) : [];
@@ -119,11 +121,6 @@ export default function App() {
   }, []);
 
   const loadInitialData = async () => {
-    if (!process.env.GEMINI_API_KEY) {
-      setLoading(false);
-      return;
-    }
-    
     // Only show loading if we have no cached events
     if (events.length === 0) {
       setLoading(true);
@@ -134,6 +131,10 @@ export default function App() {
     try {
       const data = await fetchEventsAndSchemes(searchQuery, profile || undefined);
       if (data && data.length > 0) {
+        // Check if data is from fallback (ids start with fb-)
+        const isFromFallback = data.some(e => e.id.startsWith('fb-'));
+        setIsFallback(isFromFallback);
+
         // Check for new events to notify
         if (profile?.notificationsEnabled && events.length > 0) {
           const currentIds = new Set(events.map(e => e.id));
@@ -210,6 +211,13 @@ export default function App() {
   const handleNewsletterSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newsletterEmail) return;
+
+    // Basic frontend validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newsletterEmail)) {
+      addToast("Invalid Email", "Please enter a valid email address.", "warning");
+      return;
+    }
     
     setSubscribing(true);
     try {
@@ -319,7 +327,7 @@ export default function App() {
     );
   };
 
-  const addNotification = (title: string, message: string, type: Notification['type'], link?: string) => {
+  const addNotification = useCallback((title: string, message: string, type: Notification['type'], link?: string) => {
     const newNotif: Notification = {
       id: Math.random().toString(36).substring(2, 9),
       title,
@@ -329,14 +337,16 @@ export default function App() {
       type,
       link
     };
-    const updatedNotifs = [newNotif, ...notifications].slice(0, 50);
-    setNotifications(updatedNotifs);
-    localStorage.setItem('user_notifications', JSON.stringify(updatedNotifs));
+    setNotifications(prev => {
+      const updated = [newNotif, ...prev].slice(0, 50);
+      localStorage.setItem('user_notifications', JSON.stringify(updated));
+      return updated;
+    });
     
-    if (profile?.notificationsEnabled) {
+    if (profile?.notificationsEnabled || type === 'system' || !profile) {
       addToast(title, message, "info");
     }
-  };
+  }, [profile, addToast]);
 
   const markNotificationAsRead = (id: string) => {
     const updatedNotifs = notifications.map(n => n.id === id ? { ...n, read: true } : n);
@@ -377,14 +387,15 @@ export default function App() {
       });
       setNearbyEvents(nearby);
 
-      if (profile?.notificationsEnabled) {
+      if (profile?.notificationsEnabled || !profile) {
         const newNearbyEvents = nearby.filter(event => !notifiedEventIds.has(event.id));
         if (newNearbyEvents.length > 0) {
           newNearbyEvents.forEach(event => {
-            addToast(
+            addNotification(
               "Nearby Opportunity!",
               `${event.title} is happening near you.`,
-              "info"
+              "new_event",
+              event.link
             );
           });
           
@@ -394,7 +405,7 @@ export default function App() {
         }
       }
     }
-  }, [userLocation, events, profile?.notificationsEnabled, notifiedEventIds, addToast]);
+  }, [userLocation, events, profile?.notificationsEnabled, notifiedEventIds, addNotification]);
 
   const filteredEvents = useMemo(() => {
     return events.filter(event => {
@@ -440,7 +451,7 @@ export default function App() {
               )}>
                 <Bell className="w-5 h-5" />
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setShowNotifications(true)}>
                 <h4 className="font-bold text-sm text-slate-900 truncate">{toast.title}</h4>
                 <p className="text-xs mt-0.5 text-slate-600 line-clamp-2">{toast.message}</p>
               </div>
@@ -454,6 +465,72 @@ export default function App() {
           ))}
         </AnimatePresence>
       </div>
+
+      {/* Login Modal */}
+      <AnimatePresence>
+        {showLoginModal && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowLoginModal(false)}
+              className="fixed inset-0 z-[150] bg-slate-900/40 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[160] w-full max-w-md p-4"
+            >
+              <div className="bg-white rounded-[40px] p-8 sm:p-12 shadow-2xl border border-slate-100 relative overflow-hidden">
+                <button 
+                  onClick={() => setShowLoginModal(false)}
+                  className="absolute top-6 right-6 p-2 hover:bg-slate-100 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+
+                <div className="text-center mb-10">
+                  <div className="bg-indigo-600 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-indigo-100">
+                    <User className="w-8 h-8 text-white" />
+                  </div>
+                  <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Welcome Back</h2>
+                  <p className="text-slate-500 font-medium">Sign in to sync your profile and bookmarks across all your devices.</p>
+                </div>
+
+                <div className="space-y-4">
+                  <button 
+                    onClick={() => { signInWithGoogle(); setShowLoginModal(false); }}
+                    className="flex items-center justify-center gap-3 px-6 py-4 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold hover:bg-slate-50 transition-all active:scale-95 shadow-sm w-full"
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                    <span>Continue with Google</span>
+                  </button>
+                  <button 
+                    onClick={() => { signInWithApple(); setShowLoginModal(false); }}
+                    className="flex items-center justify-center gap-3 px-6 py-4 bg-black text-white rounded-2xl font-bold hover:bg-slate-900 transition-all active:scale-95 shadow-sm w-full"
+                  >
+                    <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                      <path d="M17.05 20.28c-.98.95-2.05 1.61-3.22 1.61-1.14 0-1.54-.69-2.88-.69-1.36 0-1.81.67-2.88.67-1.11 0-2.11-.64-3.13-1.64C2.88 18.2 1.5 14.99 1.5 12.02c0-3.1 2.02-4.73 3.96-4.73 1.03 0 1.89.4 2.51.4.6 0 1.34-.44 2.56-.44 1.18 0 2.18.54 2.88 1.56-2.52 1.51-2.11 4.8 0 5.75-.64 1.54-1.49 3.08-2.36 3.72zM12.03 7.25c-.02-2.23 1.84-4.04 4.07-4.06.02 2.23-1.84 4.04-4.07 4.06z"/>
+                    </svg>
+                    <span>Continue with Apple</span>
+                  </button>
+                </div>
+
+                <p className="mt-8 text-center text-xs text-slate-400 font-medium">
+                  By continuing, you agree to our <span className="underline cursor-pointer">Terms of Service</span> and <span className="underline cursor-pointer">Privacy Policy</span>.
+                </p>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Notifications Slide-over */}
       <AnimatePresence>
@@ -481,6 +558,18 @@ export default function App() {
                   <h2 className="text-xl font-bold text-slate-900">Notifications</h2>
                 </div>
                 <div className="flex items-center gap-2">
+                  {notifications.some(n => !n.read) && (
+                    <button 
+                      onClick={() => {
+                        const updated = notifications.map(n => ({ ...n, read: true }));
+                        setNotifications(updated);
+                        localStorage.setItem('user_notifications', JSON.stringify(updated));
+                      }}
+                      className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline px-2"
+                    >
+                      Mark all read
+                    </button>
+                  )}
                   {notifications.length > 0 && (
                     <button 
                       onClick={clearNotifications}
@@ -504,28 +593,26 @@ export default function App() {
                   notifications.map((notif) => (
                     <div 
                       key={notif.id}
-                      onClick={() => markNotificationAsRead(notif.id)}
+                      onClick={() => {
+                        markNotificationAsRead(notif.id);
+                        if (notif.link) window.open(notif.link, '_blank');
+                      }}
                       className={cn(
-                        "p-4 rounded-2xl border transition-all cursor-pointer",
-                        notif.read ? "bg-white border-slate-100 opacity-60" : "bg-indigo-50/50 border-indigo-100 shadow-sm"
+                        "p-4 rounded-2xl border transition-all cursor-pointer group",
+                        notif.read ? "bg-white border-slate-100 opacity-60" : "bg-indigo-50/50 border-indigo-100 shadow-sm hover:border-indigo-300"
                       )}
                     >
                       <div className="flex justify-between items-start mb-1">
-                        <h4 className="text-sm font-bold text-slate-900">{notif.title}</h4>
+                        <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{notif.title}</h4>
                         <span className="text-[10px] font-bold text-slate-400 uppercase">
                           {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                       <p className="text-xs text-slate-600 leading-relaxed mb-2">{notif.message}</p>
                       {notif.link && (
-                        <a 
-                          href={notif.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 hover:underline"
-                        >
+                        <div className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 group-hover:underline">
                           View Details <ExternalLink className="w-3 h-3" />
-                        </a>
+                        </div>
                       )}
                     </div>
                   ))
@@ -812,7 +899,15 @@ export default function App() {
                 </section>
 
                 <section>
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Notifications</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Notifications</h3>
+                    <button 
+                      onClick={() => addNotification("Test Notification", "This is a test to verify your notification system is working!", "system")}
+                      className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
+                    >
+                      Send Test
+                    </button>
+                  </div>
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className={cn(
@@ -864,16 +959,16 @@ export default function App() {
                 <Bell className="w-5 h-5 text-white" />
               </div>
               <div className="hidden xs:block">
-                <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 uppercase">EventHub</h1>
-                <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase -mt-1">Opportunities</p>
+                <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 uppercase">Opportunity Hub</h1>
+                <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase -mt-1">Empowering Careers</p>
               </div>
             </div>
             
             <div className="flex items-center gap-2 sm:gap-4">
               {apiKeyMissing && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold border border-red-100">
+                <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 text-amber-600 rounded-xl text-xs font-bold border border-amber-100">
                   <AlertTriangle className="w-4 h-4" />
-                  <span className="hidden sm:inline">API Key Missing</span>
+                  <span className="hidden sm:inline">Offline Mode (Fallback Data)</span>
                 </div>
               )}
               
@@ -893,7 +988,7 @@ export default function App() {
                 </div>
               ) : (
                 <button 
-                  onClick={() => signInWithGoogle()}
+                  onClick={() => setShowLoginModal(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-100"
                 >
                   <User className="w-4 h-4" />
@@ -919,7 +1014,9 @@ export default function App() {
                 >
                   <Bell className="w-5 h-5" />
                   {notifications.filter(n => !n.read).length > 0 && (
-                    <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full" />
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 border-2 border-white rounded-full flex items-center justify-center text-[10px] font-black text-white">
+                      {notifications.filter(n => !n.read).length}
+                    </span>
                   )}
                 </button>
               </div>
@@ -987,7 +1084,15 @@ export default function App() {
         {/* Search and Filter Controls */}
         <div className="mb-10 space-y-4">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Explore Opportunities</h3>
+            <div className="flex items-center gap-3">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Explore Opportunities</h3>
+              {isFallback && (
+                <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full text-[10px] font-bold border border-amber-100">
+                  <AlertTriangle className="w-3 h-3" />
+                  FEATURED
+                </span>
+              )}
+            </div>
             {isUpdating && (
               <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-bold animate-pulse">
                 <RefreshCw className="w-3 h-3 animate-spin" />

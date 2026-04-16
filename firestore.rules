@@ -43,13 +43,13 @@ service cloud.firestore {
     // Collection: newsletter
     // ===============================================================
     match /newsletter/{email} {
-      // Anyone can subscribe
-      allow create: if isValidEmail(email) && 
+      // Anyone can subscribe or update their subscription
+      allow create, update: if isValidEmail(email) && 
         request.resource.data.keys().hasAll(['email', 'subscribedAt']) &&
         request.resource.data.email == email;
         
-      // Only admin can see subscribers
-      allow read, update, delete: if isAdmin();
+      // Only admin can see or delete subscribers
+      allow read, delete: if isAdmin();
     }
   }
 }

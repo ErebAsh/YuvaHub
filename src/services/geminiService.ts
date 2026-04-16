@@ -1,22 +1,36 @@
 import { GoogleGenAI } from "@google/genai";
 import { Event, UserProfile } from "../types";
+import { FALLBACK_EVENTS } from "../constants";
 
 let aiClient: GoogleGenAI | null = null;
 
-function getAiClient(): GoogleGenAI {
-  if (!aiClient) {
+function getAiClient(): GoogleGenAI | null {
+  try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is missing. Please set it in your environment variables or Secrets panel.");
+      console.warn("GEMINI_API_KEY is missing. Using fallback mode.");
+      return null;
     }
-    aiClient = new GoogleGenAI({ apiKey });
+    if (!aiClient) {
+      aiClient = new GoogleGenAI({ apiKey });
+    }
+    return aiClient;
+  } catch (err) {
+    console.error("Failed to initialize AI client:", err);
+    return null;
   }
-  return aiClient;
 }
 
 export async function fetchEventsAndSchemes(query: string = "", profile?: UserProfile): Promise<Event[]> {
   try {
     const ai = getAiClient();
+    
+    // If no AI client (missing key or init error), return fallback immediately
+    if (!ai) {
+      console.info("API Key not available. Serving high-quality fallback data.");
+      return FALLBACK_EVENTS;
+    }
+
     const profileContext = profile ? `
       User Profile:
       - Location: ${profile.location}
@@ -93,6 +107,7 @@ export async function fetchEventsAndSchemes(query: string = "", profile?: UserPr
       name: error.name,
       cause: error.cause
     });
-    return [];
+    // Return high-quality fallback events if API fails
+    return FALLBACK_EVENTS;
   }
 }
