@@ -630,6 +630,16 @@ export default function App() {
                   </button>
                 </div>
 
+                <div className="mt-8 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex gap-3 text-left items-start">
+                  <Info className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight mb-1">Secure Sign-in</p>
+                    <p className="text-[10px] font-medium text-slate-500 leading-normal">
+                      On the next screen, you'll see a Google identity address starting with <span className="font-bold text-slate-700">gen-lang-client...</span>. This is our secure technical ID used for AI identity verification. It's safe to continue!
+                    </p>
+                  </div>
+                </div>
+
                 <p className="mt-8 text-center text-xs text-slate-400 font-medium">
                   By continuing, you agree to our <span className="underline cursor-pointer">Terms of Service</span> and <span className="underline cursor-pointer">Privacy Policy</span>.
                 </p>
@@ -1103,12 +1113,7 @@ export default function App() {
                   <AlertTriangle className="w-4 h-4" />
                   <span className="hidden sm:inline">Offline Mode (Fallback Data)</span>
                 </div>
-              ) : (
-                <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold border border-emerald-100">
-                  <Wifi className="w-4 h-4" />
-                  <span className="hidden sm:inline">Online (AI Active)</span>
-                </div>
-              )}
+              ) : null}
               
               {user ? (
                 <div className="flex items-center gap-2">
