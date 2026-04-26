@@ -22,7 +22,7 @@ During the Vercel setup process:
 
 ## 4. Deploy
 1. Click **Deploy**.
-2. Vercel will build the app and provide you with a public URL (e.g., `event-hub.vercel.app`).
+2. Vercel will build the app and provide you with a public URL (e.g., `yuva-hub.vercel.app`).
 
 ## Troubleshooting "Lost API"
 If you see an error about the API key:

@@ -231,7 +231,7 @@ export async function getAssistantResponse(userMessage: string, profile: UserPro
       Available Opportunities: ${JSON.stringify(currentEvents.map(e => ({ title: e.title, organization: e.organization, type: e.type, isPaid: e.isPaid })))}
     `;
 
-    const prompt = `You are a helpful student opportunity assistant named EventHub AI.
+    const prompt = `You are a helpful student opportunity assistant named YuvaHub AI.
     Your goal is to help students find hackathons, scholarships, and programs.
     Use the provided context to answer the user's question accurately.
     If they ask for specific types (e.g., beginner, free, AI-related), look through the available opportunities.

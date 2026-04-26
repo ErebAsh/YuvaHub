@@ -218,7 +218,11 @@ export default function App() {
 
   const addToast = useCallback((title: string, message: string, type: Toast['type'] = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
-    setToasts(prev => [...prev, { id, title, message, type }]);
+    setToasts(prev => {
+      const newToasts = [...prev, { id, title, message, type }];
+      // Limit to 3 most recent toasts to avoid blocking the UI
+      return newToasts.slice(-3);
+    });
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 5000);
@@ -680,14 +684,22 @@ export default function App() {
       if (profile?.notificationsEnabled || !profile) {
         const newNearbyEvents = nearby.filter(event => !notifiedEventIds.has(event.id));
         if (newNearbyEvents.length > 0) {
-          newNearbyEvents.forEach(event => {
+          if (newNearbyEvents.length > 2) {
             addNotification(
-              "Nearby Opportunity!",
-              `${event.title} is happening near you.`,
-              "new_event",
-              event.link
+              "Nearby Opportunities!",
+              `We found ${newNearbyEvents.length} new events happening near you. View them in your local feed.`,
+              "new_event"
             );
-          });
+          } else {
+            newNearbyEvents.forEach(event => {
+              addNotification(
+                "Nearby Opportunity!",
+                `${event.title} is happening near you.`,
+                "new_event",
+                event.link
+              );
+            });
+          }
           
           const updatedIds = new Set([...notifiedEventIds, ...newNearbyEvents.map(e => e.id)]);
           setNotifiedEventIds(updatedIds);
@@ -964,7 +976,7 @@ export default function App() {
                 </h3>
                 <div className="space-y-4">
                   {[
-                    { name: 'Aditya S.', win: 'Selected for MLH Fellowship', text: 'EventHub helped me find the perfect hackathon to build my portfolio. After 3 months, I finally got selected!', date: '2 days ago' },
+                    { name: 'Aditya S.', win: 'Selected for MLH Fellowship', text: 'YuvaHub helped me find the perfect hackathon to build my portfolio. After 3 months, I finally got selected!', date: '2 days ago' },
                     { name: 'Priya M.', win: 'Winner at Smart India Hackathon', text: 'The personalized feed showed me SIH just 1 week before the deadline. We won first place @ National level!', date: '1 week ago' },
                   ].map((story, idx) => (
                     <div key={idx} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
@@ -1212,7 +1224,7 @@ export default function App() {
               <Sparkles className="text-white w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tighter text-slate-900 leading-none">EventHub</h1>
+              <h1 className="text-xl font-black tracking-tighter text-slate-900 leading-none">YuvaHub</h1>
               <p className="text-[10px] uppercase tracking-widest font-black text-indigo-500 mt-1">Student Platform</p>
             </div>
           </div>
@@ -1274,7 +1286,7 @@ export default function App() {
             <div className="bg-indigo-600 w-8 h-8 rounded-xl flex items-center justify-center">
               <Sparkles className="text-white w-4 h-4" />
             </div>
-            <h1 className="text-lg font-black tracking-tighter text-slate-900">EventHub</h1>
+            <h1 className="text-lg font-black tracking-tighter text-slate-900">YuvaHub</h1>
           </div>
           <button 
             onClick={() => setActiveTab('profile')}
@@ -1331,7 +1343,7 @@ export default function App() {
               <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-indigo-600 text-white">
                 <div className="flex items-center gap-3">
                   <Sparkles className="w-5 h-5" />
-                  <h2 className="font-black text-lg tracking-tight">EventHub AI</h2>
+                  <h2 className="font-black text-lg tracking-tight">YuvaHub AI</h2>
                 </div>
                 <button onClick={() => setIsAssistantOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
                   <X className="w-5 h-5" />
@@ -1723,13 +1735,33 @@ export default function App() {
 
   function ToastContainer() {
     return (
-      <div className="fixed bottom-6 right-6 z-[200] flex flex-col gap-3 max-w-[calc(100vw-3rem)] sm:max-w-md w-full pointer-events-none">
-        <AnimatePresence>
+      <div className="fixed top-4 right-4 left-4 sm:left-auto sm:top-auto sm:bottom-6 sm:right-6 z-[200] flex flex-col gap-2 max-w-[calc(100vw-2rem)] sm:max-w-md pointer-events-none">
+        <AnimatePresence mode="popLayout">
           {toasts.map(toast => (
-            <motion.div key={toast.id} initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className={cn("pointer-events-auto p-4 rounded-2xl shadow-xl border bg-white flex items-start gap-3", toast.type === 'success' ? "border-emerald-100" : "border-slate-100")}>
-              <div className={cn("p-2 rounded-lg", toast.type === 'success' ? "bg-emerald-100 text-emerald-600" : "bg-indigo-100 text-indigo-600")}><Bell className="w-4 h-4" /></div>
-              <div className="flex-1 min-w-0"><h4 className="font-bold text-sm text-slate-900">{toast.title}</h4><p className="text-xs text-slate-500 mt-0.5">{toast.message}</p></div>
-              <button onClick={() => setToasts(t => t.filter(x => x.id !== toast.id))}><X className="w-4 h-4 text-slate-300" /></button>
+            <motion.div 
+              key={toast.id} 
+              layout
+              initial={{ opacity: 0, y: -20, scale: 0.95 }} 
+              animate={{ opacity: 1, y: 0, scale: 1 }} 
+              exit={{ opacity: 0, scale: 0.95 }} 
+              className={cn(
+                "pointer-events-auto p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-2xl border bg-white/95 backdrop-blur-md flex items-start gap-3", 
+                toast.type === 'success' ? "border-emerald-100" : "border-slate-100"
+              )}
+            >
+              <div className={cn("p-1.5 sm:p-2 rounded-lg shrink-0", toast.type === 'success' ? "bg-emerald-100 text-emerald-600" : "bg-indigo-100 text-indigo-600")}>
+                <Bell className="w-3.5 h-3.5 sm:w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="font-bold text-xs sm:text-sm text-slate-900 leading-tight">{toast.title}</h4>
+                <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 line-clamp-2">{toast.message}</p>
+              </div>
+              <button 
+                onClick={() => setToasts(t => t.filter(x => x.id !== toast.id))}
+                className="p-1 hover:bg-slate-100 rounded-full transition-colors shrink-0"
+              >
+                <X className="w-3.5 h-3.5 sm:w-4 h-4 text-slate-300" />
+              </button>
             </motion.div>
           ))}
         </AnimatePresence>
