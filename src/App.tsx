@@ -6,8 +6,8 @@
 import React, { useState, useEffect, useMemo, useCallback, Component, ReactNode, ErrorInfo } from 'react';
 import { 
   Search, MapPin, Bell, BellRing, ExternalLink, Filter, Info, 
-  Briefcase, GraduationCap, X, Check, User, Sparkles, 
-  BellOff, Settings, ChevronRight, Sliders, Globe, 
+  Briefcase, GraduationCap, X, Check, User, Sparkles, TrendingUp,
+  BellOff, Settings, ChevronRight, Sliders, Globe, Menu,
   Calendar, ArrowRight, LayoutGrid, List, AlertTriangle, RefreshCw,
   Bookmark, BookmarkCheck, Trash2, Wifi, WifiOff, Clock, Mail, ChevronDown,
   Zap, Copy, Loader2, Users, MessageSquare, Send, Trophy, Star, FileText, AlertCircle
@@ -109,6 +109,8 @@ export default function App() {
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [draftContent, setDraftContent] = useState<string | null>(null);
   const [assistantInput, setAssistantInput] = useState('');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [hasVisitedForYou, setHasVisitedForYou] = useState(() => localStorage.getItem('has_visited_for_you') === 'true');
 
   const [showSettings, setShowSettings] = useState(!profile);
   const [settingsTab, setSettingsTab] = useState<'profile' | 'applications'>('profile');
@@ -528,17 +530,25 @@ export default function App() {
   };
 
   const isProfileComplete = useMemo(() => {
-    return profile && 
+    return !!(profile && 
            profile.name && 
            profile.email && 
            profile.phone && 
            profile.dob && 
-           profile.age && 
            profile.college && 
            profile.skills && 
-           profile.skills.length > 0 && 
-           profile.location;
+           (profile.skills.length > 0) && 
+           profile.location);
   }, [profile]);
+
+  const handleTabChange = (tab: any) => {
+    if (tab === 'recommendations') {
+      setHasVisitedForYou(true);
+      localStorage.setItem('has_visited_for_you', 'true');
+    }
+    setActiveTab(tab);
+    setIsMobileMenuOpen(false);
+  };
 
   const directRegister = async (event: Event) => {
     if (!user) {
@@ -733,6 +743,11 @@ export default function App() {
   const eligibilities = useMemo(() => ['all', ...Array.from(new Set(events.map(e => e.eligibility).filter(Boolean) as string[]))], [events]);
 
   const [lastServerSearch, setLastServerSearch] = useState('');
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    const saved = localStorage.getItem('recent_searches');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [isSearching, setIsSearching] = useState(false);
 
   const filteredEvents = useMemo(() => {
     const list = events.filter(event => {
@@ -813,14 +828,17 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const handleAssistantChat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const input = assistantInput.trim();
+  const handleAssistantChat = async (e?: React.FormEvent, directInput?: string) => {
+    if (e) e.preventDefault();
+    const input = directInput || assistantInput.trim();
     if (!input) return;
 
+    if (!directInput) setAssistantInput('');
+    
+    // Only add user message if it's not a direct trigger message (or we can include it)
     const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: input, timestamp: Date.now() };
     setChatMessages(prev => [...prev, userMsg]);
-    setAssistantInput('');
+    setIsAssistantOpen(true);
     setAssistantLoading(true);
 
     const response = await getAssistantResponse(input, profile, events);
@@ -1309,7 +1327,7 @@ export default function App() {
 
       default: // Discover
         return (
-          <div className="p-6 lg:p-10">
+          <div className="p-6 lg:p-10 max-w-screen-2xl mx-auto">
             {/* Existing Hero & Search */}
             <header className="mb-12">
               {apiKeyMissing && (
@@ -1346,15 +1364,20 @@ export default function App() {
               </h2>
 
               <div className="max-w-2xl relative group">
-                <form onSubmit={handleSearch} className="relative">
+                <div className="relative">
                   <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
-                    <Search className="w-5 h-5" />
+                    {isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
                   </div>
                   <input 
                     type="text" 
                     placeholder="Search hackathons, scholarships, domains..."
-                    className="w-full pl-16 pr-24 py-6 bg-white border border-slate-200 rounded-[32px] text-lg font-bold placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-xl shadow-slate-100/50"
+                    className="w-full pl-16 pr-32 py-6 bg-white border border-slate-200 rounded-[32px] text-lg font-bold placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-xl shadow-slate-100/50"
                     value={searchQuery}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSearch();
+                      }
+                    }}
                     onChange={(e) => {
                       const val = e.target.value;
                       setSearchQuery(val);
@@ -1366,14 +1389,22 @@ export default function App() {
                     onFocus={() => setShowSuggestions(true)}
                   />
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                     <button 
-                       type="submit"
-                       className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95 shadow-lg shadow-slate-200"
-                     >
-                       Go
-                     </button>
+                    {searchQuery && (
+                      <button 
+                        onClick={() => setSearchQuery('')}
+                        className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  <button 
+                    onClick={() => handleSearch()}
+                    className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95 shadow-lg shadow-slate-200"
+                  >
+                    Search
+                  </button>
                   </div>
-                </form>
+                </div>
                 
                 {/* AI Refinements */}
                 {smartRefinements.length > 0 && !loading && (
@@ -1397,21 +1428,54 @@ export default function App() {
                 
                 {/* Suggestions Dropdown */}
                 <AnimatePresence>
-                  {showSuggestions && suggestions.length > 0 && (
+                  {showSuggestions && (recentSearches.length > 0 || searchQuery.length > 0) && (
                     <motion.div 
-                      className="absolute top-full left-0 right-0 mt-4 bg-white border border-slate-100 rounded-3xl shadow-2xl p-4 z-[100] suggestions-dropdown"
+                      className="absolute top-full left-0 right-0 mt-4 bg-white border border-slate-100 rounded-3xl shadow-2xl p-4 z-[100] suggestions-dropdown overflow-hidden"
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
                     >
-                      <div className="p-2 space-y-1">
-                        {suggestions.map((s, idx) => (
+                      {searchQuery.length === 0 && recentSearches.length > 0 && (
+                        <div className="mb-4">
+                           <div className="px-4 py-2 flex items-center justify-between">
+                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Recent Searches</span>
+                             <button onClick={() => { setRecentSearches([]); localStorage.removeItem('recent_searches'); }} className="text-[10px] font-bold text-indigo-500 hover:underline">Clear All</button>
+                           </div>
+                           {recentSearches.map((s, idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => { setSearchQuery(s); handleSearch(s); }}
+                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 rounded-2xl text-left text-sm font-bold text-slate-600 transition-colors"
+                              >
+                                <Clock className="w-4 h-4 text-slate-300 shrink-0" />
+                                {s}
+                              </button>
+                            ))}
+                        </div>
+                      )}
+
+                      <div className="px-4 py-2">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Trending Opportunities</span>
+                      </div>
+                      <div className="p-2 grid grid-cols-1 sm:grid-cols-2 gap-1">
+                        {[
+                          "Google Summer of Code", 
+                          "DAAD Scholarship", 
+                          "IIT Bombay Hackathon",
+                          "Reliance Foundation Scholarship",
+                          "Smart India Hackathon",
+                          "Tata Imagination Challenge",
+                          "HDFC Badhte Kadam",
+                          "Stanford University Scholarship",
+                          "Flipkart GRiD",
+                          "Adobe Women in Tech Scholarship"
+                        ].map((s, idx) => (
                           <button
                             key={idx}
                             onClick={() => { setSearchQuery(s); handleSearch(s); }}
-                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 rounded-2xl text-left text-sm font-bold text-slate-600 transition-colors"
+                            className="flex items-center gap-3 px-4 py-3 hover:bg-indigo-50 rounded-2xl text-left text-[11px] font-bold text-slate-600 transition-colors"
                           >
-                            <Clock className="w-4 h-4 text-slate-300 shrink-0" />
+                            <TrendingUp className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                             {s}
                           </button>
                         ))}
@@ -1448,18 +1512,44 @@ export default function App() {
               <div className="flex-1" />
 
               {profile && (
-                <button
-                  onClick={() => setIsSmartRankEnabled(!isSmartRankEnabled)}
-                  className={cn(
-                    "flex items-center gap-2.5 px-6 py-3.5 rounded-full text-xs font-black uppercase tracking-widest transition-all border whitespace-nowrap",
-                    isSmartRankEnabled
-                      ? "bg-indigo-600 text-white border-indigo-600 shadow-xl shadow-indigo-100"
-                      : "bg-white text-slate-400 border-slate-200 hover:border-slate-300"
-                  )}
-                >
-                  <Zap className={cn("w-4 h-4", isSmartRankEnabled ? "fill-current" : "")} />
-                  Smart Match {isSmartRankEnabled ? 'On' : 'Off'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (!profile.smartMatchOnboarded) {
+                        setShowOnboarding(true);
+                      } else {
+                        setIsSmartRankEnabled(!isSmartRankEnabled);
+                      }
+                    }}
+                    className={cn(
+                      "flex items-center gap-2.5 px-6 py-3.5 rounded-full text-xs font-black uppercase tracking-widest transition-all border whitespace-nowrap group relative overflow-hidden",
+                      isSmartRankEnabled
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-xl shadow-indigo-100"
+                        : "bg-white text-slate-400 border-slate-200 hover:border-slate-300"
+                    )}
+                  >
+                    <div className="relative z-10 flex items-center gap-2.5">
+                      <Zap className={cn("w-4 h-4", isSmartRankEnabled ? "fill-current" : "")} />
+                      {isSmartRankEnabled ? (
+                        <>
+                          <span className="flex items-center gap-2">
+                            Smart Match Active
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          </span>
+                        </>
+                      ) : 'Smart Match Off'}
+                    </div>
+                  </button>
+                  <div className="group relative">
+                    <button className="p-2 text-slate-300 hover:text-indigo-500 transition-colors">
+                      <Info className="w-4 h-4" />
+                    </button>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-slate-900 text-white text-[10px] font-bold rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all shadow-2xl z-50">
+                      AI-powered matching based on your profile interests, skills and studies.
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900" />
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -1585,113 +1675,242 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900 selection:bg-indigo-100 selection:text-indigo-900 flex">
-      {/* Sidebar - Desktop */}
-      <aside className="hidden lg:flex w-72 bg-white border-r border-slate-100 flex-col shrink-0 sticky top-0 h-screen">
-        <div className="p-8">
-          <div className="flex items-center gap-3 mb-10 group cursor-pointer" onClick={() => setActiveTab('discover')}>
+    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900 selection:bg-indigo-100 selection:text-indigo-900 flex flex-col">
+      {/* Sticky Top Header */}
+      <header className="sticky top-0 z-[100] w-full bg-white/80 backdrop-blur-xl border-b border-slate-100 h-20 flex items-center shrink-0">
+        <div className="max-w-screen-2xl mx-auto w-full px-6 flex items-center justify-between">
+          {/* Logo */}
+          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => handleTabChange('discover')}>
             <div className="bg-indigo-600 w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200 group-hover:scale-110 transition-transform">
               <Sparkles className="text-white w-5 h-5" />
             </div>
-            <div>
+            <div className="hidden sm:block">
               <h1 className="text-xl font-black tracking-tighter text-slate-900 leading-none">YuvaHub</h1>
               <p className="text-[10px] uppercase tracking-widest font-black text-indigo-500 mt-1">Student Platform</p>
             </div>
           </div>
 
-          <nav className="space-y-1.5">
+          {/* Main Nav (Center) - Desktop */}
+          <nav className="hidden md:flex items-center gap-1 bg-slate-50 p-1.5 rounded-[22px] border border-slate-100">
             {[
-              { id: 'discover', label: 'Discover', icon: Globe },
-              { id: 'recommendations', label: 'For You', icon: Sparkles, badge: 'New' },
-              { id: 'tracker', label: 'Tracker', icon: Calendar },
-              { id: 'community', label: 'Community', icon: Users },
-              { id: 'profile', label: user ? 'My Profile' : 'Login / Profile', icon: User },
+              { id: 'discover', label: 'Discover', sub: 'All Opportunities', icon: Globe },
+              { id: 'recommendations', label: 'For You', sub: 'Matched Items', icon: Sparkles, badge: !hasVisitedForYou ? 'New' : null },
             ].map((item) => (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id as any)}
+                onClick={() => handleTabChange(item.id as any)}
+                title={item.sub}
                 className={cn(
-                  "w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all group",
+                  "relative flex items-center gap-2.5 px-5 py-2.5 rounded-[18px] transition-all group overflow-hidden",
                   activeTab === item.id 
-                    ? "bg-indigo-50 text-indigo-600" 
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                    ? "bg-white text-indigo-600 shadow-sm" 
+                    : "text-slate-500 hover:text-slate-900"
                 )}
               >
-                <div className="flex items-center gap-3">
-                  <item.icon className={cn("w-5 h-5", activeTab === item.id ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-600")} />
-                  <span className="font-bold text-sm">{item.label}</span>
+                <item.icon className={cn("w-4 h-4", activeTab === item.id ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-900")} />
+                <div className="text-left">
+                  <p className="font-black text-xs leading-none mb-0.5">{item.label}</p>
+                  <p className="text-[8px] uppercase tracking-widest font-medium opacity-50">{item.sub}</p>
                 </div>
                 {item.badge && (
-                  <span className="bg-indigo-600 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md">
+                  <motion.span 
+                    animate={{ scale: [1, 1.1, 1] }} 
+                    transition={{ repeat: Infinity, duration: 2 }}
+                    className="absolute top-1 right-1 bg-indigo-600 text-white text-[6px] font-black uppercase px-1 rounded-full"
+                  >
                     {item.badge}
-                  </span>
+                  </motion.span>
                 )}
               </button>
             ))}
           </nav>
-        </div>
 
-        <div className="mt-auto p-6">
-          <div className="bg-slate-900 rounded-3xl p-5 relative overflow-hidden group">
-            <div className="relative z-10">
-              <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-1">Weekly Insight</p>
-              <h4 className="text-white font-bold text-sm leading-tight mb-3">AI is the most high-growth domain in Bangalore.</h4>
+          {/* Right Actions */}
+          <div className="flex items-center gap-4">
+            {!user ? (
+              <div className="flex items-center gap-2 sm:gap-3">
+                <button 
+                  onClick={() => setShowLoginModal(true)}
+                  className="hidden sm:block text-indigo-600 text-[10px] font-black uppercase tracking-widest px-4 py-2 hover:bg-indigo-50 rounded-xl transition-all"
+                >
+                  Sign Up Free
+                </button>
+                <button 
+                  onClick={() => setShowLoginModal(true)}
+                  className="flex items-center gap-2.5 px-6 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 active:scale-95"
+                >
+                  <User className="w-4 h-4" />
+                  <span>Login</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => setShowNotifications(true)}
+                  className="relative p-3 bg-slate-50 text-slate-500 rounded-2xl border border-slate-100 hover:border-indigo-200 hover:text-indigo-600 transition-all"
+                >
+                  <Bell className="w-5 h-5" />
+                  {notifications.some(n => !n.read) && (
+                    <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-indigo-600 rounded-full border-2 border-white" />
+                  )}
+                </button>
+                <button 
+                  onClick={() => setActiveTab('profile')}
+                  className={cn(
+                    "flex items-center gap-3 pl-2 pr-3 py-2 rounded-2xl border transition-all",
+                    activeTab === 'profile' ? "bg-indigo-50 border-indigo-200" : "bg-white border-slate-100 hover:border-slate-300"
+                  )}
+                >
+                  <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-100 overflow-hidden">
+                    {user.photoURL ? <img src={user.photoURL} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <User className="w-4 h-4" />}
+                  </div>
+                  <div className="hidden lg:block text-left">
+                    <p className="text-[10px] font-black text-slate-900 uppercase">My Profile</p>
+                    <p className="text-[9px] font-bold text-slate-400 -mt-0.5 max-w-[80px] truncate">{user.displayName || user.email}</p>
+                  </div>
+                </button>
+              </div>
+            )}
+            
+            {/* Mobile Menu Toggle */}
+            <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="md:hidden p-3 bg-slate-100 text-slate-900 rounded-2xl hover:bg-slate-200 transition-colors"
+            >
+              {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar - Desktop (Secondary Nav) */}
+        <aside className="hidden lg:flex w-72 bg-white border-r border-slate-100 flex-col shrink-0 overflow-y-auto">
+          <div className="p-8 pt-6">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 px-4">Dashboard</h3>
+            <nav className="space-y-1.5">
+              {[
+                { id: 'tracker', label: 'My Tracker', icon: Calendar, sub: 'Applied & Saved' },
+                { id: 'community', label: 'Community', icon: Users, sub: 'Connect & Discuss' },
+                { id: 'profile', label: 'Settings', icon: Settings, sub: 'Account Privacy' },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => handleTabChange(item.id as any)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-5 py-4 rounded-2xl transition-all group",
+                    activeTab === item.id 
+                      ? "bg-indigo-50 text-indigo-600 shadow-sm" 
+                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                  )}
+                >
+                  <item.icon className={cn("w-5 h-5", activeTab === item.id ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-600")} />
+                  <div className="text-left">
+                    <p className="font-bold text-sm tracking-tight">{item.label}</p>
+                    <p className="text-[9px] font-bold text-slate-400 mt-0.5">{item.sub}</p>
+                  </div>
+                </button>
+              ))}
+            </nav>
+
+            <div className="mt-12 bg-indigo-50 rounded-3xl p-6 border border-indigo-100/50">
+              <div className="bg-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center text-white mb-4 shadow-lg shadow-indigo-200">
+                <Trophy className="w-5 h-5" />
+              </div>
+              <h4 className="text-sm font-black text-indigo-900 mb-2 leading-tight">Win ₹50K Prizes</h4>
+              <p className="text-[10px] font-medium text-indigo-700 leading-relaxed mb-4">Participate in our monthly hackathons and build your portfolio.</p>
               <button 
-                onClick={() => setIsAssistantOpen(true)}
-                className="w-full bg-white text-slate-900 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors"
+                onClick={() => { handleTabChange('discover'); setFilterType('hackathon'); }}
+                className="w-full py-2.5 bg-white text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-colors shadow-sm"
               >
-                Ask Assistant
+                Join Now
               </button>
             </div>
-            <div className="absolute -right-4 -bottom-4 bg-indigo-500/20 w-24 h-24 rounded-full blur-2xl group-hover:bg-indigo-500/30 transition-colors" />
           </div>
-        </div>
-      </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto h-screen relative scroll-smooth">
-        {/* Mobile Header */}
-        <header className="lg:hidden flex items-center justify-between p-6 bg-white border-b border-slate-100 sticky top-0 z-50">
-          <div className="flex items-center gap-2">
-            <div className="bg-indigo-600 w-8 h-8 rounded-xl flex items-center justify-center">
-              <Sparkles className="text-white w-4 h-4" />
+          <div className="mt-auto p-6 border-t border-slate-50">
+            <div className="bg-slate-900 rounded-3xl p-5 relative overflow-hidden group">
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-2">
+                   <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                   <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Weekly Insight</p>
+                </div>
+                <h4 className="text-white font-bold text-sm leading-tight mb-4">AI is the most high-growth domain in Bangalore.</h4>
+                <button 
+                  onClick={() => setIsAssistantOpen(true)}
+                  className="w-full bg-indigo-600 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-colors shadow-xl shadow-indigo-900/20"
+                >
+                  Message Assistant
+                </button>
+              </div>
             </div>
-            <h1 className="text-lg font-black tracking-tighter text-slate-900">YuvaHub</h1>
           </div>
-          <button 
-            onClick={() => setActiveTab('profile')}
-            className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border-2 border-white shadow-sm"
-          >
-            <User className="w-5 h-5 text-slate-600" />
-          </button>
-        </header>
+        </aside>
 
-        {renderContent()}
-        
-        {/* Navigation Bar - Mobile */}
-        <nav className="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur-xl border border-slate-200 py-2 px-3 rounded-[32px] shadow-2xl flex items-center gap-1 z-50 whitespace-nowrap">
-          {[
-            { id: 'discover', label: 'Home', icon: Globe },
-            { id: 'recommendations', label: 'For You', icon: Sparkles },
-            { id: 'tracker', label: 'Tracker', icon: Calendar },
-            { id: 'profile', label: user ? 'Profile' : 'Sign In', icon: User },
-          ].map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id as any)}
-              className={cn(
-                "flex flex-col items-center justify-center px-5 py-2.5 rounded-2xl transition-all duration-300 gap-1",
-                activeTab === item.id 
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200" 
-                  : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-              )}
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-y-auto h-full scroll-smooth bg-white md:bg-transparent">
+          {renderContent()}
+        </main>
+      </div>
+
+      {/* Mobile Drawer Navigation */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 z-[150] bg-slate-900/40 backdrop-blur-sm md:hidden"
+            />
+            <motion.div 
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 z-[160] bg-white rounded-t-[40px] p-8 border-t border-slate-100 shadow-2xl md:hidden flex flex-col gap-6"
             >
-              <item.icon className="w-5 h-5" />
-              <span className="text-[10px] font-black uppercase tracking-tighter">{item.label}</span>
-            </button>
-          ))}
-        </nav>
-      </main>
+              <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-2" />
+              
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { id: 'discover', label: 'Discover', icon: Globe, sub: 'Explore all' },
+                  { id: 'recommendations', label: 'For You', icon: Sparkles, sub: 'Relevant picks' },
+                  { id: 'tracker', label: 'Tracker', icon: Calendar, sub: 'Save events' },
+                  { id: 'community', label: 'Community', icon: Users, sub: 'Social space' },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleTabChange(item.id as any)}
+                    className={cn(
+                      "flex flex-col items-center justify-center p-6 rounded-[32px] transition-all gap-2.5 border",
+                      activeTab === item.id 
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-xl shadow-indigo-200" 
+                        : "bg-slate-50 text-slate-500 border-slate-100"
+                    )}
+                  >
+                    <item.icon className="w-6 h-6" />
+                    <div className="text-center">
+                      <p className="text-xs font-black uppercase tracking-tighter">{item.label}</p>
+                      <p className={cn("text-[8px] font-bold opacity-60", activeTab === item.id ? "text-white" : "text-slate-400")}>{item.sub}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {!user && (
+                <button 
+                  onClick={() => { setIsMobileMenuOpen(false); setShowLoginModal(true); }}
+                  className="w-full py-5 bg-slate-900 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-slate-200 mb-2"
+                >
+                  Join YuvaHub Free
+                </button>
+              )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* AI Assistant Sidebar/Modal */}
       <AnimatePresence>
@@ -1767,7 +1986,7 @@ export default function App() {
 
       {/* Onboarding Modal */}
       <AnimatePresence>
-        {showOnboarding && <OnboardingQuiz onComplete={() => setShowOnboarding(false)} />}
+        {showOnboarding && <SmartMatchOnboarding onComplete={() => setShowOnboarding(false)} />}
       </AnimatePresence>
 
       <NotificationsPanel />
@@ -1858,12 +2077,9 @@ export default function App() {
             </div>
             <div className="flex gap-1.5">
               <button 
-                onClick={async (e) => {
+                onClick={(e) => {
                   e.stopPropagation();
-                  setAssistantLoading(true);
-                  const draft = await generateDraft('SOP', event.title, event.organization, profile);
-                  setDraftContent(draft);
-                  setAssistantLoading(false);
+                  handleAssistantChat(undefined, `Help me write a statement of purpose (SOP) for ${event.title} organized by ${event.organization}.`);
                 }}
                 className="p-2.5 rounded-xl transition-all shadow-sm border bg-slate-50 text-slate-500 hover:border-indigo-200 hover:text-indigo-600"
                 title="Draft SOP with AI"
@@ -1945,11 +2161,9 @@ export default function App() {
                {[...Array(5)].map((_, i) => <Star key={i} className="w-3 h-3 fill-current" />)}
             </div>
             <button 
-              onClick={async () => {
-                setAssistantLoading(true);
-                const draft = await generateDraft('SOP', event.title, event.organization, profile);
-                setDraftContent(draft);
-                setAssistantLoading(false);
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAssistantChat(undefined, `Write a short statement of purpose (SOP) for "${event.title}".`);
               }}
               className="text-[10px] font-black text-slate-400 uppercase hover:text-indigo-600 transition-colors"
             >
@@ -1961,21 +2175,22 @@ export default function App() {
     );
   }
 
-  function OnboardingQuiz({ onComplete }: { onComplete: () => void }) {
+  function SmartMatchOnboarding({ onComplete }: { onComplete: () => void }) {
     const [step, setStep] = useState(1);
     const [data, setData] = useState<Partial<UserProfile>>({
-      currentClass: '',
-      fieldOfStudy: '',
-      preferredLanguage: 'English',
-      budgetPreference: 'any',
-      preferredDomains: [],
-      skills: []
+      interests: profile?.interests || [],
+      degree: profile?.degree || '',
+      yearOfStudy: profile?.yearOfStudy || '',
+      college: profile?.college || '',
+      location: profile?.location || '',
+      eligibility: profile?.eligibility || 'Open to all',
+      notificationsEnabled: profile?.notificationsEnabled || false
     });
 
     const handleNext = () => {
-      if (step < 5) setStep(step + 1);
+      if (step < 3) setStep(step + 1);
       else {
-        const updated = { ...profile, ...data, onboardingComplete: true } as UserProfile;
+        const updated = { ...profile, ...data, smartMatchOnboarded: true } as UserProfile;
         setProfile(updated);
         localStorage.setItem('user_profile', JSON.stringify(updated));
         if (user) {
@@ -1985,140 +2200,158 @@ export default function App() {
       }
     };
 
+    const INTERESTS = ['AI/ML', 'Web Dev', 'Design', 'Finance', 'Research', 'Social Impact', 'Hardware', 'Biotech'];
+
     return (
       <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" />
         <motion.div 
-          initial={{ scale: 0.9, y: 30 }} 
-          animate={{ scale: 1, y: 0 }} 
-          className="bg-white w-full max-w-sm rounded-[40px] p-8 relative shadow-2xl overflow-hidden"
+          initial={{ opacity: 0 }} 
+          animate={{ opacity: 1 }} 
+          exit={{ opacity: 0 }}
+          onClick={() => onComplete()}
+          className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" 
+        />
+        <motion.div 
+          initial={{ scale: 0.9, y: 20, opacity: 0 }} 
+          animate={{ scale: 1, y: 0, opacity: 1 }} 
+          exit={{ scale: 0.9, y: 20, opacity: 0 }}
+          className="bg-white w-full max-w-md rounded-[40px] p-10 relative shadow-2xl overflow-hidden border border-slate-100"
         >
-          <div className="h-1.5 w-full bg-slate-100 rounded-full mb-8 overflow-hidden">
-             <motion.div animate={{ width: `${(step / 5) * 100}%` }} className="h-full bg-indigo-600" />
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex gap-1.5">
+               {[1, 2, 3].map(s => (
+                 <div key={s} className={cn("h-1.5 rounded-full transition-all duration-500", s === step ? "bg-indigo-600 w-8" : s < step ? "bg-indigo-200 w-4" : "bg-slate-100 w-4")} />
+               ))}
+            </div>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{step}/3</span>
           </div>
 
           <AnimatePresence mode="wait">
-            <motion.div key={step} initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
-              {step === 1 && (
-                <div className="space-y-6 text-center">
-                  <GraduationCap className="w-12 h-12 text-indigo-600 mx-auto mb-2" />
-                  <h3 className="text-xl font-black text-slate-900">What's your current grade?</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {['12th Standard', 'Undergrad', 'Postgrad', 'PhD'].map(c => (
-                      <button 
-                        key={c}
-                        onClick={() => setData({ ...data, currentClass: c })}
-                        className={cn("px-4 py-3 rounded-2xl text-xs font-bold border transition-all", data.currentClass === c ? "bg-indigo-600 text-white border-indigo-600" : "bg-slate-50 text-slate-600 border-slate-100")}
-                      >
-                        {c}
-                      </button>
-                    ))}
-                  </div>
+            {step === 1 && (
+              <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                <h3 className="text-2xl font-black text-slate-900 mb-2 leading-tight">What interests you?</h3>
+                <p className="text-sm font-medium text-slate-500 mb-8">Select domains you want to discover opportunities in.</p>
+                <div className="flex flex-wrap gap-2 mb-10">
+                  {INTERESTS.map(interest => (
+                    <button
+                      key={interest}
+                      onClick={() => {
+                        const current = data.interests || [];
+                        setData({ ...data, interests: current.includes(interest) ? current.filter(i => i !== interest) : [...current, interest] });
+                      }}
+                      className={cn(
+                        "px-4 py-2.5 rounded-2xl text-xs font-bold border transition-all",
+                        data.interests?.includes(interest) ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-100" : "bg-slate-50 text-slate-500 border-slate-100 hover:border-slate-200"
+                      )}
+                    >
+                      {interest}
+                    </button>
+                  ))}
                 </div>
-              )}
-              {step === 2 && (
-                <div className="space-y-6 text-center">
-                  <Briefcase className="w-12 h-12 text-indigo-600 mx-auto mb-2" />
-                  <h3 className="text-xl font-black text-slate-900">What do you study?</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {['Engineering', 'Commerce', 'Arts', 'Design', 'Law', 'Medical'].map(f => (
-                      <button 
-                        key={f}
-                        onClick={() => setData({ ...data, fieldOfStudy: f })}
-                        className={cn("px-4 py-3 rounded-2xl text-xs font-bold border transition-all", data.fieldOfStudy === f ? "bg-indigo-600 text-white border-indigo-600" : "bg-slate-50 text-slate-600 border-slate-100")}
+              </motion.div>
+            )}
+
+            {step === 2 && (
+              <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                <h3 className="text-2xl font-black text-slate-900 mb-2 leading-tight">Tell us about your studies</h3>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Year</label>
+                      <select 
+                        value={data.yearOfStudy} 
+                        onChange={e => setData({ ...data, yearOfStudy: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/10 outline-none"
                       >
-                        {f}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {step === 3 && (
-                <div className="space-y-6 text-center">
-                  <Globe className="w-12 h-12 text-indigo-600 mx-auto mb-2" />
-                  <h3 className="text-xl font-black text-slate-900">Language & Preferences</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Preferred Language</p>
-                      <div className="flex gap-2 justify-center">
-                         {['English', 'Hindi', 'Mixed'].map(l => (
-                           <button key={l} onClick={() => setData({ ...data, preferredLanguage: l })} className={cn("px-4 py-2 rounded-xl text-[10px] font-bold border", data.preferredLanguage === l ? "bg-slate-900 text-white" : "bg-slate-50")}>{l}</button>
-                         ))}
-                      </div>
+                        <option value="">Select Year</option>
+                        {['1st Year', '2nd Year', '3rd Year', '4th Year+', 'Masters', 'PhD'].map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Notifications</p>
-                      <button 
-                        onClick={() => setData({ ...data, notificationsEnabled: !data.notificationsEnabled })}
-                        className={cn(
-                          "w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all",
-                          data.notificationsEnabled ? "bg-indigo-50 border-indigo-200 text-indigo-700" : "bg-slate-50 border-slate-100 text-slate-500"
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Bell className={cn("w-4 h-4", data.notificationsEnabled ? "fill-current" : "")} />
-                          <span className="text-xs font-bold">Stay Updated</span>
-                        </div>
-                        <div className={cn("w-2 h-2 rounded-full", data.notificationsEnabled ? "bg-indigo-600 animate-pulse" : "bg-slate-300")} />
-                      </button>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Degree</label>
+                      <input 
+                        placeholder="e.g. B.Tech"
+                        value={data.degree} 
+                        onChange={e => setData({ ...data, degree: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/10 outline-none"
+                      />
                     </div>
                   </div>
-                </div>
-              )}
-              {step === 4 && (
-                <div className="space-y-6 text-center">
-                  <Star className="w-12 h-12 text-indigo-600 mx-auto mb-2" />
-                  <h3 className="text-xl font-black text-slate-900">Interests & Domains</h3>
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    {['AI/ML', 'Blockchain', 'Cybersecurity', 'Sustainable Devel.', 'Govt. Schemes', 'Internships', 'Social Impact'].map(d => (
-                      <button 
-                        key={d}
-                        onClick={() => {
-                          const domains = data.preferredDomains || [];
-                          setData({ ...data, preferredDomains: domains.includes(d) ? domains.filter(x => x !== d) : [...domains, d] });
-                        }}
-                        className={cn("px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all", data.preferredDomains?.includes(d) ? "bg-indigo-600 text-white" : "bg-slate-50")}
-                      >
-                        {d}
-                      </button>
-                    ))}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">College / University</label>
+                    <input 
+                      placeholder="Enter your college name"
+                      value={data.college} 
+                      onChange={e => setData({ ...data, college: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/10 outline-none"
+                    />
                   </div>
                 </div>
-              )}
-              {step === 5 && (
-                <div className="space-y-6 text-center">
-                  <Zap className="w-12 h-12 text-indigo-600 mx-auto mb-2" />
-                  <h3 className="text-xl font-black text-slate-900">Your Expertise (Skills)</h3>
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    {['Frontend', 'Backend', 'Python', 'Design', 'Management', 'Public Speaking', 'Data Analysis', 'Problem Solving'].map(s => (
-                      <button 
-                        key={s}
-                        onClick={() => {
-                          const skills = data.skills || [];
-                          setData({ ...data, skills: skills.includes(s) ? skills.filter(x => x !== s) : [...skills, s] });
-                        }}
-                        className={cn("px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all", data.skills?.includes(s) ? "bg-indigo-600 text-white" : "bg-slate-50")}
-                      >
-                        {s}
-                      </button>
-                    ))}
+              </motion.div>
+            )}
+
+            {step === 3 && (
+              <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                <h3 className="text-2xl font-black text-slate-900 mb-2 leading-tight">Location & Preferences</h3>
+                <div className="space-y-4">
+                   <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Location (State)</label>
+                    <input 
+                      placeholder="e.g. Karnataka"
+                      value={data.location} 
+                      onChange={e => setData({ ...data, location: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/10 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Eligibility Filter</label>
+                    <select 
+                      value={data.eligibility} 
+                      onChange={e => setData({ ...data, eligibility: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/10 outline-none"
+                    >
+                      <option value="Open to all">Open to all</option>
+                      <option value="Indian nationals">Indian nationals</option>
+                      <option value="Women only">Women only</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100">
+                    <div className="flex items-center gap-3">
+                      <Bell className="w-4 h-4 text-indigo-600" />
+                      <span className="text-xs font-bold text-indigo-900">Email Notifications</span>
+                    </div>
+                    <button 
+                      onClick={() => setData({ ...data, notificationsEnabled: !data.notificationsEnabled })}
+                      className={cn("w-10 h-6 rounded-full transition-colors relative", data.notificationsEnabled ? "bg-indigo-600" : "bg-slate-200")}
+                    >
+                      <div className={cn("absolute top-1 w-4 h-4 bg-white rounded-full transition-all", data.notificationsEnabled ? "left-5" : "left-1")} />
+                    </button>
                   </div>
                 </div>
-              )}
-            </motion.div>
+              </motion.div>
+            )}
           </AnimatePresence>
 
           <div className="mt-10 flex gap-3">
-             <button onClick={() => setStep(s => Math.max(1, s - 1))} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button>
-             <button onClick={handleNext} className="flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100">
-               {step === 5 ? 'Finish' : 'Next'}
-             </button>
+            {step > 1 && (
+              <button 
+                onClick={() => setStep(step - 1)}
+                className="flex-1 py-4 bg-slate-50 text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-colors"
+              >
+                Back
+              </button>
+            )}
+            <button 
+              onClick={handleNext}
+              className="flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100"
+            >
+              {step === 3 ? 'Enable Smart Match' : 'Next Step'}
+            </button>
           </div>
         </motion.div>
       </div>
     );
   }
-
   // Extract other modals to sub-components for better organization
   function LoginModal() {
     const [isLogin, setIsLogin] = useState(true);
@@ -2426,23 +2659,73 @@ export default function App() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowNotifications(false)} className="fixed inset-0 z-[150] bg-slate-900/20 backdrop-blur-sm" />
             <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} className="fixed right-0 top-0 bottom-0 z-[160] w-full max-w-md bg-white shadow-2xl flex flex-col">
               <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="font-black text-lg tracking-tight">Alerts Center</h3>
-                <button onClick={() => setShowNotifications(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X className="w-5 h-5 text-slate-400" /></button>
+                <div>
+                  <h3 className="font-black text-lg tracking-tight">Alerts Center</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Recent Updates</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {notifications.length > 0 && (
+                    <button 
+                      onClick={() => {
+                        const updated = notifications.map(n => ({ ...n, read: true }));
+                        setNotifications(updated);
+                        localStorage.setItem('user_notifications', JSON.stringify(updated));
+                      }}
+                      className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors text-[10px] font-black uppercase tracking-widest"
+                    >
+                      Clear All
+                    </button>
+                  )}
+                  <button onClick={() => setShowNotifications(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X className="w-5 h-5 text-slate-400" /></button>
+                </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {notifications.map(n => (
-                  <div key={n.id} onClick={() => {
-                      setShowNotifications(false);
-                      if (n.eventId) {
-                        setActiveTab('discover');
-                        setTimeout(() => document.getElementById(`event-${n.eventId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
-                      }
-                    }} 
-                    className={cn("p-4 rounded-2xl border transition-all cursor-pointer", n.read ? "bg-white border-slate-100 opacity-60" : "bg-indigo-50 border-indigo-100")}>
-                    <h4 className="text-sm font-bold mb-1">{n.title}</h4>
-                    <p className="text-xs text-slate-500">{n.message}</p>
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/30">
+                {notifications.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center px-10">
+                    <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center text-slate-200 mb-6 shadow-sm">
+                      <BellOff className="w-8 h-8" />
+                    </div>
+                    <h4 className="text-lg font-black text-slate-900 mb-2">No alerts yet</h4>
+                    <p className="text-sm font-medium text-slate-500 mb-8">We'll notify you about new hackathons, scholarships and application updates.</p>
+                    <button 
+                      onClick={() => { setShowNotifications(false); setActiveTab('discover'); }}
+                      className="px-8 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-slate-200"
+                    >
+                      Discover Opportunities
+                    </button>
                   </div>
-                ))}
+                ) : (
+                  notifications.map(n => (
+                    <div key={n.id} onClick={() => {
+                        markNotificationAsRead(n.id);
+                        if (n.link) window.open(n.link, '_blank');
+                      }} 
+                      className={cn(
+                        "p-5 rounded-[24px] border transition-all cursor-pointer group hover:scale-[1.02] active:scale-[0.98]", 
+                        n.read ? "bg-white border-slate-100 opacity-60" : "bg-white border-indigo-100 shadow-sm shadow-indigo-100/20"
+                      )}>
+                      <div className="flex items-start gap-4">
+                        <div className={cn(
+                          "w-10 h-10 rounded-xl shrink-0 flex items-center justify-center",
+                          n.type === 'new_event' ? "bg-emerald-50 text-emerald-600" :
+                          n.type === 'deadline' ? "bg-amber-50 text-amber-600" :
+                          "bg-indigo-50 text-indigo-600"
+                        )}>
+                          {n.type === 'new_event' ? <Sparkles className="w-5 h-5" /> : 
+                           n.type === 'deadline' ? <Clock className="w-5 h-5" /> : 
+                           <Bell Ring={true} className="w-5 h-5" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <h4 className="text-sm font-black text-slate-900 truncate pr-4">{n.title}</h4>
+                            <span className="text-[9px] font-bold text-slate-400 whitespace-nowrap">{new Date(n.timestamp).toLocaleDateString()}</span>
+                          </div>
+                          <p className="text-xs text-slate-500 leading-relaxed font-medium line-clamp-2">{n.message}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </motion.div>
           </>
