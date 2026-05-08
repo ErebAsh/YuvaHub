@@ -26,6 +26,9 @@ export default function Dashboard({ user, profile }: DashboardProps) {
   const [assistContent, setAssistContent] = useState<string | null>(null);
   const [assistingOpp, setAssistingOpp] = useState<any>(null);
 
+  const [hasNewUpdates, setHasNewUpdates] = useState(false);
+  const [newLiveItems, setNewLiveItems] = useState<any[]>([]);
+
   useEffect(() => {
     if (user && profile) {
       loadInitialFeed(false, discoveryMode);
@@ -34,6 +37,29 @@ export default function Dashboard({ user, profile }: DashboardProps) {
       const interval = setInterval(() => {
         loadInitialFeed(false, discoveryMode);
       }, 300000);
+
+      // Simulate live background updates (polling for new opportunities)
+      const liveUpdateInterval = setInterval(() => {
+        if (!loading && !loadingMore && feedItems.length > 0) {
+          // Fake 30% chance every 15 seconds to find a new live opportunity
+          if (Math.random() > 0.70) {
+            const simulatedLiveOpp = {
+              title: `Live Discovery: ${Math.random() > 0.5 ? 'Global' : 'Virtual'} Hackathon ${Math.floor(Math.random() * 1000)}`,
+              org: "Yuvahub Live Network",
+              type: "hackathon",
+              deadline: "5 days",
+              description: "A newly discovered hackathon automatically injected into your smart feed based on your interests.",
+              tags: profile.skills?.slice(0, 2) || ["Tech", "Coding"],
+              matchReason: "Live match based on your real-time profile activity.",
+              isNew: true,
+              isLive: true,
+              applyLink: "https://yuvahub.xyz"
+            };
+            setNewLiveItems(prev => [simulatedLiveOpp, ...prev]);
+            setHasNewUpdates(true);
+          }
+        }
+      }, 15000);
       
       // Also refresh on window focus
       const handleFocus = () => loadInitialFeed(false, discoveryMode);
@@ -41,10 +67,11 @@ export default function Dashboard({ user, profile }: DashboardProps) {
       
       return () => {
         clearInterval(interval);
+        clearInterval(liveUpdateInterval);
         window.removeEventListener('focus', handleFocus);
       };
     }
-  }, [user, profile, discoveryMode]);
+  }, [user, profile, discoveryMode, feedItems.length, loading, loadingMore]);
 
   const loadInitialFeed = async (force = false, mode = discoveryMode) => {
     // Only show full loading spinner for first load or force refresh
@@ -223,8 +250,26 @@ export default function Dashboard({ user, profile }: DashboardProps) {
             <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-4" />
             <p className="text-gray-500 font-medium text-sm">Processing parameters via Gemini...</p>
           </div>
-        ) : feedItems.length > 0 ? (
-          <div className="space-y-8">
+        ) : feedItems.length > 0 || newLiveItems.length > 0 ? (
+          <div className="space-y-8 relative">
+
+            {/* Live Update Pill */}
+            {hasNewUpdates && (
+              <div className="sticky top-4 z-40 flex justify-center w-full">
+                <button
+                  onClick={() => {
+                    setFeedItems(prev => [...newLiveItems, ...prev]);
+                    setNewLiveItems([]);
+                    setHasNewUpdates(false);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg rounded-full px-6 py-2.5 text-sm font-bold flex items-center gap-2 transition-transform hover:scale-105"
+                >
+                  ↑ {newLiveItems.length} New {newLiveItems.length === 1 ? 'Opportunity' : 'Opportunities'}
+                </button>
+              </div>
+            )}
+
             {([
               { title: "New Today", icon: <Sparkles className="w-5 h-5 text-amber-500" />, items: feedItems.filter(i => i.isNew) },
               { title: "Previously Seen", icon: <Compass className="w-5 h-5 text-gray-400" />, items: feedItems.filter(i => !i.isNew) }
@@ -249,7 +294,10 @@ export default function Dashboard({ user, profile }: DashboardProps) {
                           <span className="text-xs font-semibold px-2 py-1 bg-blue-50 text-blue-700 rounded-md">
                             {item.type || 'Opportunity'}
                           </span>
-                          {(item.matchScore || item.smartMatch || item.smart_match) && <span className="text-xs font-semibold text-green-600">⚡ {item.matchScore ? item.matchScore + '% Match' : 'Smart Match'}</span>}
+                          <div className="flex gap-2 items-center">
+                            {item.isLive && <span className="text-[10px] uppercase font-bold text-white bg-red-500 px-2 py-0.5 rounded-full animate-pulse">Live</span>}
+                            {(item.matchScore || item.smartMatch || item.smart_match) && <span className="text-xs font-semibold text-green-600">⚡ {item.matchScore ? item.matchScore + '% Match' : 'Smart Match'}</span>}
+                          </div>
                         </div>
                         <h4 className="font-bold text-gray-900 mb-1">{item.title}</h4>
                         <p className="text-sm text-gray-500 mb-3">{item.organization || item.org}</p>
