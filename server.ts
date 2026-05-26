@@ -210,13 +210,16 @@ async function startServer() {
   app.get("/api/v1/admin/scrapers", async (req, res) => {
     let devpostCount = 0;
     let unstopCount = 0;
+    let oppsCircleCount = 0;
     if (db) {
       devpostCount = await db.collection("opportunities").countDocuments({ source: "devpost" });
       unstopCount = await db.collection("opportunities").countDocuments({ source: "unstop" });
+      oppsCircleCount = await db.collection("opportunities").countDocuments({ source: "opportunities_circle" });
     }
     res.json([
       { name: "Devpost", status: "healthy", lastRun: 1, items: devpostCount, failures: 0, proxyHealth: "green" },
-      { name: "Unstop", status: "healthy", lastRun: 1, items: unstopCount, failures: 0, proxyHealth: "green" }
+      { name: "Unstop", status: "healthy", lastRun: 1, items: unstopCount, failures: 0, proxyHealth: "green" },
+      { name: "Opportunities Circle", status: "healthy", lastRun: 1, items: oppsCircleCount, failures: 0, proxyHealth: "green" }
     ]);
   });
 
