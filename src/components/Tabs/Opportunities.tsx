@@ -1,10 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Users, ChevronRight, Clock, Star, Share2, Copy } from 'lucide-react';
+import { Search, Filter, Users, ChevronRight, Clock, Star, Share2, Copy, RefreshCw } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { searchOpportunities, trackInteraction } from '../../services/apiClient';
 
-export default function Opportunities({ user, profile, onViewDetails }: { user: any, profile: UserProfile | null, onViewDetails?: (id: string, title?: string) => void }) {
-  const [searchQuery, setSearchQuery] = useState('');
+export default function Opportunities({ 
+  user, 
+  profile, 
+  onViewDetails,
+  searchQuery,
+  setSearchQuery
+}: { 
+  user: any, 
+  profile: UserProfile | null, 
+  onViewDetails?: (id: string, title?: string) => void,
+  searchQuery?: string,
+  setSearchQuery?: React.Dispatch<React.SetStateAction<string>>
+}) {
+  const [localSearchQuery, setLocalSearchQuery] = useState('');
+  
+  const qVal = searchQuery !== undefined ? searchQuery : localSearchQuery;
+  const setQVal = setSearchQuery !== undefined ? setSearchQuery : setLocalSearchQuery;
+
   const [searchData, setSearchData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
@@ -15,16 +31,11 @@ export default function Opportunities({ user, profile, onViewDetails }: { user: 
     eligibility: { 'College Students': true, 'Professionals': false }
   });
 
-  useEffect(() => {
-    // Initial fetch
-    fetchData("Student opportunities");
-  }, []);
-
   const fetchData = async (q: string) => {
     setLoading(true);
     try {
       const typeStr = filters.type.Internships ? 'Internship' : (filters.type.Hackathons ? 'Hackathon' : 'All');
-      const results = await searchOpportunities(q || searchQuery || "Opportunities", typeStr, 1, {});
+      const results = await searchOpportunities(q || "Student opportunities", typeStr, 1, {});
       setSearchData(results);
     } catch (e) {
       console.error(e);
@@ -33,6 +44,14 @@ export default function Opportunities({ user, profile, onViewDetails }: { user: 
     }
   };
 
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      fetchData(qVal);
+    }, 350);
+
+    return () => clearTimeout(handler);
+  }, [qVal, filters]);
+
   const clearFilters = () => {
     setFilters({
       status: { 'Live': false, 'Upcoming': false, 'Closed': false },
@@ -40,6 +59,19 @@ export default function Opportunities({ user, profile, onViewDetails }: { user: 
       eligibility: { 'College Students': false, 'Professionals': false }
     });
   };
+
+  const filteredResults = React.useMemo(() => {
+    if (!searchData || !searchData.results) return [];
+    const query = qVal.trim().toLowerCase();
+    if (!query) return searchData.results;
+    
+    return searchData.results.filter((opp: any) => {
+      const titleMatch = (opp.title || "").toLowerCase().includes(query);
+      const categoryMatch = (opp.category || "").toLowerCase().includes(query);
+      const descMatch = (opp.description || "").toLowerCase().includes(query);
+      return titleMatch || categoryMatch || descMatch;
+    });
+  }, [searchData, qVal]);
 
   const getThumbStyle = (type: string) => {
     const t = (type || '').toLowerCase();
@@ -118,6 +150,21 @@ export default function Opportunities({ user, profile, onViewDetails }: { user: 
       {/* Main Content */}
       <main className="flex-1 min-w-0">
          
+         <div className="flex justify-between items-end mb-6">
+           <div className="hidden md:block">
+             <h2 className="text-[24px] font-[800] tracking-tight text-gray-900 mb-1">Opportunities Explorer</h2>
+             <p className="text-[14px] text-[#64748B]">Browse and filter the complete live database.</p>
+           </div>
+           <button 
+             onClick={() => fetchData(qVal)}
+             disabled={loading}
+             className="flex items-center gap-2 bg-white border border-[#E2E8F0] px-4 py-2 rounded-[8px] text-[13px] font-[600] text-[#0F172A] hover:bg-[#F8FAFC] transition-colors shadow-sm disabled:opacity-50"
+           >
+             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+             Refresh
+           </button>
+         </div>
+
          {/* Search Header for Mobile */}
          <div className="md:hidden relative mb-6">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -125,9 +172,9 @@ export default function Opportunities({ user, profile, onViewDetails }: { user: 
               type="text" 
               placeholder="Search standard competitions..." 
               className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-[8px] px-10 py-3 text-[14px]"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && fetchData(searchQuery)}
+              value={qVal}
+              onChange={e => setQVal(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && fetchData(qVal)}
             />
          </div>
 
@@ -135,9 +182,9 @@ export default function Opportunities({ user, profile, onViewDetails }: { user: 
             <div className="flex py-20 justify-center">
                <div className="w-8 h-8 border-4 border-[#2563EB] border-t-transparent rounded-full animate-spin"></div>
             </div>
-         ) : searchData?.results?.length ? (
+         ) : filteredResults?.length ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-[16px]">
-               {searchData.results.map((opp: any, i: number) => {
+               {filteredResults.map((opp: any, i: number) => {
                   const cleanSlug = (opp.title || "opportunity").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
                   
                   return (
@@ -193,7 +240,7 @@ export default function Opportunities({ user, profile, onViewDetails }: { user: 
          )}
 
          {/* Pagination */}
-         {!loading && searchData?.results?.length > 0 && (
+         {!loading && filteredResults?.length > 0 && (
             <div className="flex items-center justify-center gap-[6px] mt-10">
                <button className="w-[36px] h-[36px] rounded-[8px] bg-white border border-[#E2E8F0] flex items-center justify-center text-[#64748B] hover:border-[#2563EB] hover:text-[#2563EB] transition-colors">‹</button>
                <button className="w-[36px] h-[36px] rounded-[8px] bg-[#2563EB] text-white font-medium flex items-center justify-center">1</button>

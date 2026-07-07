@@ -154,15 +154,29 @@ export const CURATED_FALLBACKS: FallbackOpportunity[] = [
   }
 ];
 
-export function getFilteredFallbacks(profile: any, maxCount: number = 6): FallbackOpportunity[] {
+export function getFilteredFallbacks(profile: any, maxCount: number = 6, searchQuery?: string): FallbackOpportunity[] {
   const skills = profile?.skills ? String(profile.skills).toLowerCase().split(',').map((s: string) => s.trim()) : [];
   const field = profile?.field ? String(profile.field).toLowerCase().trim() : "";
   const country = profile?.country ? String(profile.country).toLowerCase().trim() : "";
+  const q = searchQuery ? searchQuery.toLowerCase().trim() : "";
 
   // Dynamic scoring of fallback items based on current student profile
   const scored = CURATED_FALLBACKS.map(item => {
     let score = 70; // baseline
     let reasonBonus = "";
+
+    // If query matches
+    if (q) {
+      const titleMatch = item.title.toLowerCase().includes(q);
+      const orgMatch = item.organization.toLowerCase().includes(q);
+      const descriptionMatch = item.description.toLowerCase().includes(q);
+      const tagMatch = item.tags.some(tag => tag.toLowerCase().includes(q));
+
+      if (titleMatch || orgMatch || descriptionMatch || tagMatch) {
+         score += 200; // HUGE boost representing primary search matching
+         reasonBonus = `Matched your search for "${searchQuery}". `;
+      }
+    }
 
     // Match skills/tags
     if (skills.length > 0) {
@@ -171,7 +185,9 @@ export function getFilteredFallbacks(profile: any, maxCount: number = 6): Fallba
       );
       if (matchedSkills.length > 0) {
         score += matchedSkills.length * 8;
-        reasonBonus = `Aligned with your skills (${matchedSkills.slice(0, 2).join(', ')}). `;
+        if (!reasonBonus) {
+          reasonBonus = `Aligned with your skills (${matchedSkills.slice(0, 2).join(', ')}). `;
+        }
       }
     }
 
@@ -182,7 +198,9 @@ export function getFilteredFallbacks(profile: any, maxCount: number = 6): Fallba
                           item.description.toLowerCase().includes(field);
       if (matchField) {
         score += 15;
-        reasonBonus += `Great fit for your academic focus in ${profile.field}. `;
+        if (!reasonBonus) {
+          reasonBonus = `Great fit for your academic focus in ${profile?.field || field}. `;
+        }
       }
     }
 
@@ -191,18 +209,32 @@ export function getFilteredFallbacks(profile: any, maxCount: number = 6): Fallba
       score += 10;
     }
 
-    const finalScore = Math.min(99, score);
+    const finalScore = Math.min(299, score);
     const finalReason = reasonBonus ? reasonBonus.trim() : (item.match_reason || "Selected based on high value and student reputation.");
 
     return {
       ...item,
-      match_score: finalScore,
+      match_score: finalScore >= 270 ? Math.floor(Math.random() * 5) + 95 : Math.min(99, finalScore),
       match_reason: finalReason
     };
   });
 
   // Sort by calculated score descending
   scored.sort((a, b) => (b.match_score || 0) - (a.match_score || 0));
+
+  // If a filter is requested (q is non-empty), keep only matching elements
+  if (q) {
+    const queryMatches = scored.filter(item => {
+      const titleMatch = item.title.toLowerCase().includes(q);
+      const orgMatch = item.organization.toLowerCase().includes(q);
+      const descriptionMatch = item.description.toLowerCase().includes(q);
+      const tagMatch = item.tags.some(tag => tag.toLowerCase().includes(q));
+      return titleMatch || orgMatch || descriptionMatch || tagMatch;
+    });
+    if (queryMatches.length > 0) {
+      return queryMatches.slice(0, maxCount);
+    }
+  }
 
   return scored.slice(0, maxCount);
 }

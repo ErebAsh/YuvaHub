@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Bot, Briefcase, GraduationCap, Sparkles, ChevronRight, CheckCircle, Search, ScrollText } from 'lucide-react';
+import { FileText, Bot, Briefcase, GraduationCap, Sparkles, ChevronRight, CheckCircle, Search, ScrollText, Send } from 'lucide-react';
 import { UserProfile } from '../../types';
 import * as geminiService from '../../services/gemini';
 
@@ -16,6 +16,7 @@ export default function AIAssistant({ user, profile }: AIAssistantProps) {
     { id: 'cover_letter', title: 'Cover Letter Generator', icon: ScrollText, desc: 'Generate a professional cover letter in seconds.', color: 'text-blue-600', bg: 'bg-blue-50' },
     { id: 'interview_prep', title: 'Mock Interview Prep', icon: Briefcase, desc: 'Practice technical or behavioral interview questions.', color: 'text-green-600', bg: 'bg-green-50' },
     { id: 'career_mentor', title: 'Career Guidance', icon: Bot, desc: 'Ask about paths, skills, or get a personalized roadmap.', color: 'text-orange-600', bg: 'bg-orange-50' },
+    { id: 'opp_finder', title: 'AI Opportunity Matcher', icon: Search, desc: 'Describe what you are looking for in plain language to get matched.', color: 'text-emerald-600', bg: 'bg-emerald-50' },
   ];
 
   if (!activeModule) {
@@ -96,7 +97,8 @@ export default function AIAssistant({ user, profile }: AIAssistantProps) {
       {activeModule === 'resume_review' && <ResumeReview />}
       {activeModule === 'cover_letter' && <CoverLetter profile={profile} />}
       {activeModule === 'interview_prep' && <InterviewPrep profile={profile} />}
-      {activeModule === 'career_mentor' && <CareerMentor />}
+      {activeModule === 'career_mentor' && <CareerMentor user={user} />}
+      {activeModule === 'opp_finder' && <AIOpportunityMatcher profile={profile} />}
 
     </div>
   );
@@ -342,24 +344,316 @@ function InterviewPrep({ profile }: { profile: any }) {
 // ---------------------------
 // Career Mentor Component
 // ---------------------------
-function CareerMentor() {
+function CareerMentor({ user }: { user: any }) {
+  const [messages, setMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string; timestamp: number }[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const SUGGESTIONS = [
+    "How do I get into GSoC?",
+    "Review my LinkedIn summary",
+    "What skills do I need for ML internships?",
+    "I'm a 2nd year CSE student, what should I do next?"
+  ];
+
+  const handleSend = async (text: string) => {
+    if (!text.trim()) return;
+    
+    const userMsg = { id: Date.now().toString(), role: 'user' as const, content: text, timestamp: Date.now() };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setIsLoading(true);
+
+    try {
+      const history = messages.map(m => ({ role: m.role, content: m.content }));
+      const response = await geminiService.chatWithMentor(history, text);
+      const botMsg = { id: 'bot-'+Date.now(), role: 'assistant' as const, content: typeof response === 'string' ? response : JSON.stringify(response), timestamp: Date.now() };
+      setMessages(prev => [...prev, botMsg]);
+    } catch (e) {
+      const botMsg = { id: 'bot-'+Date.now(), role: 'assistant' as const, content: JSON.stringify({text: "Connection to logical pathways failed."}), timestamp: Date.now() };
+      setMessages(prev => [...prev, botMsg]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const renderMessageContent = (m: any) => {
+    if (m.role === 'user') {
+      return (
+        <div className="max-w-[80%] p-4 rounded-2xl text-sm whitespace-pre-wrap bg-blue-600 text-white rounded-br-none shadow-sm">
+          {m.content}
+        </div>
+      );
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(m.content);
+    } catch (e) {
+      parsed = { text: m.content };
+    }
+
+    return (
+      <div className="flex flex-col gap-3 max-w-[85%] sm:max-w-[75%]">
+        <div className="p-4 rounded-2xl text-sm whitespace-pre-wrap bg-gray-100 text-gray-800 rounded-bl-none">
+          {parsed.text || m.content}
+        </div>
+        
+        {parsed.card && (
+          <div className="clean-card p-4 border border-blue-100 bg-white shadow-sm">
+            <h4 className="font-bold text-gray-900 mb-1">{parsed.card.title}</h4>
+            <div className="text-sm text-blue-600 font-medium mb-2">{parsed.card.org} • {parsed.card.type}</div>
+            <p className="text-sm text-gray-600 mb-4 line-clamp-2">{parsed.card.description}</p>
+            <div className="flex justify-between items-center mt-auto border-t border-gray-100 pt-3">
+              <span className="text-xs text-red-500 font-semibold">{parsed.card.deadline || "Open"}</span>
+              {parsed.card.applyLink && (
+                <a href={parsed.card.applyLink} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors border border-blue-700">
+                  Apply / Register
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {parsed.options && parsed.options.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-1">
+            {parsed.options.map((opt: string, i: number) => (
+              <button 
+                key={i}
+                onClick={() => handleSend(opt)}
+                className="px-3 py-1.5 bg-white border border-blue-200 text-blue-800 shadow-sm text-xs font-medium rounded-full hover:bg-blue-50 transition-colors"
+                disabled={isLoading}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex-1 clean-card flex flex-col h-[600px] overflow-hidden bg-white border border-gray-100 shadow-sm">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col no-scrollbar">
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center m-auto h-full text-center space-y-6 animate-in fade-in zoom-in duration-300 pb-8">
+            <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center">
+               <Bot className="w-8 h-8 text-blue-600" />
+            </div>
+            <div className="max-w-md space-y-2">
+              <h3 className="text-xl font-bold text-gray-900">Yuva AI Career Mentor</h3>
+              <p className="text-gray-500 text-sm font-medium animate-pulse">I help with career decisions, software paths, application strategies, and skills development.</p>
+            </div>
+            <div className="flex flex-wrap justify-center gap-2 max-w-xl">
+              {SUGGESTIONS.map(s => (
+                <button key={s} onClick={() => handleSend(s)} className="px-3.5 py-1.5 border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 rounded-full text-xs font-medium transition-colors">
+                  "{s}"
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          messages.map(m => (
+            <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              {renderMessageContent(m)}
+            </div>
+          ))
+        )}
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="max-w-[80%] p-4 rounded-2xl bg-gray-100 text-gray-800 rounded-bl-none flex items-center gap-2">
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-75"></div>
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-150"></div>
+            </div>
+          </div>
+        )}
+      </div>
+      
+      <div className="p-4 border-t border-gray-100 bg-white">
+        <div className="relative flex items-center">
+          <input 
+            type="text" 
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSend(input) }}
+            placeholder="Ask your mentor anything about paths, resume advice, or skills..."
+            className="w-full pr-16 pl-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:border-blue-500 focus:bg-white outline-none text-sm transition-all shadow-inner"
+          />
+          <button onClick={() => handleSend(input)} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------
+// AI Opportunity Matcher Component
+// ---------------------------
+import { searchOpportunities as clientSearchOpportunities } from '../../services/apiClient';
+
+function AIOpportunityMatcher({ profile }: { profile: any }) {
+  const [description, setDescription] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [refinedQuery, setRefinedQuery] = useState("");
+  const [matches, setMatches] = useState<any[]>([]);
+  const [searched, setSearched] = useState(false);
+
+  const handleMatchSearch = async () => {
+    if (!description.trim()) return;
+    setLoading(true);
+    setSearched(true);
+    try {
+      const refined = await geminiService.refineSearchQuery(description, profile);
+      setRefinedQuery(refined);
+
+      const response = await clientSearchOpportunities(refined || description);
+      if (response && response.results) {
+        setMatches(response.results);
+      } else {
+        setMatches([]);
+      }
+    } catch (e) {
+      console.error("Match search error:", e);
+      setMatches([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const SUGGESTED_DESCRIPTIONS = [
+    "I am looking for a remote open source project or fellowship to learn Git & TypeScript.",
+    "Show me summer software engineering internships at Google or Stripe with flexible options.",
+    "A coding challenge or hackathon focusing on artificial intelligence with money rewards."
+  ];
+
   return (
     <div className="animate-fade-in space-y-6">
       <header>
         <h2 className="text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-3">
-          <Bot className="w-8 h-8 text-orange-600" /> AI Career Mentor
+          <Search className="w-8 h-8 text-emerald-600" /> AI Opportunity Matcher
         </h2>
-        <p className="text-gray-500">Chat with our dedicated AI career advisor about skills, pivoting, or growth paths.</p>
+        <p className="text-gray-500">Describe what you are looking for in plain language, and we will find the absolute best-matching opportunities.</p>
       </header>
 
-      <div className="clean-card h-[500px] flex flex-col justify-center items-center text-center border-dashed border-gray-300 bg-gray-50">
-         <Bot className="w-16 h-16 text-gray-300 mb-4" />
-         <h3 className="text-lg font-bold text-gray-800 mb-2">Mentor Interface</h3>
-         <p className="text-gray-500 max-w-sm">The chat interface is ready to connect via WebSockets. Begin interacting to generate real-time roadmaps.</p>
-         <button className="mt-6 px-6 py-3 bg-orange-600 text-white font-bold rounded-lg shadow disabled:opacity-50 hover:bg-orange-700 transition">
-            Start Mentorship Session
-         </button>
+      <div className="clean-card p-6 space-y-4">
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Describe what you're seeking (e.g. skills, role type, company, timeline):</label>
+          <textarea 
+            className="w-full h-32 border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-emerald-500 outline-none resize-none font-sans shadow-inner bg-slate-50/50" 
+            value={description} 
+            onChange={e => setDescription(e.target.value)} 
+            placeholder="e.g. I am a sophomore interested in AI/ML software engineering. I prefer remote hackathons or internships where I can practice pytorch and collaborate with teams..."
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-2 pb-2">
+          {SUGGESTED_DESCRIPTIONS.map((s, idx) => (
+            <button 
+              key={idx} 
+              onClick={() => setDescription(s)} 
+              className="text-left px-3.5 py-2 border border-gray-100 hover:border-emerald-300 hover:bg-emerald-50 bg-white rounded-xl text-xs font-semibold text-gray-650 hover:text-emerald-800 transition-all max-w-full cursor-pointer"
+            >
+              "{s}"
+            </button>
+          ))}
+        </div>
+
+        <div className="flex justify-end pt-2">
+          <button 
+            onClick={handleMatchSearch} 
+            disabled={loading || !description.trim()}
+            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md disabled:bg-gray-300 transition-all flex items-center gap-2 cursor-pointer hover:scale-[1.01]"
+          >
+            {loading ? <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" /> : <Sparkles className="w-4 h-4 text-emerald-100 fill-emerald-100" />}
+            Find Best Matches
+          </button>
+        </div>
       </div>
+
+      {searched && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <div>
+              <h3 className="text-lg font-bold text-gray-950">Matched Opportunities</h3>
+              {refinedQuery && (
+                <p className="text-xs text-gray-500 mt-1">
+                  AI Concentrated Keywords: <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded font-semibold text-[11px]">{refinedQuery}</span>
+                </p>
+              )}
+            </div>
+            <span className="text-xs bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full font-bold">
+              {matches.length} matches found
+            </span>
+          </div>
+
+          {loading ? (
+             <div className="clean-card p-12 text-center flex flex-col items-center justify-center space-y-4 bg-white">
+                 <div className="w-12 h-12 rounded-full border-4 border-emerald-50 border-t-emerald-600 animate-spin" />
+                 <p className="text-sm font-semibold text-gray-600">Yuva Scout Protocol analyzing match scores...</p>
+             </div>
+          ) : matches.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {matches.map((item, idx) => (
+                <div key={item.id || idx} className="clean-card p-6 hover:shadow-md hover:border-emerald-300 transition-all flex flex-col justify-between h-full group bg-white border border-gray-150">
+                  <div>
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xxs font-black uppercase rounded-md tracking-wider">
+                        {item.type || 'Opportunity'}
+                      </span>
+                      {item.match_score && (
+                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50/50 px-2 py-0.5 rounded">
+                          {item.match_score}% Align
+                        </span>
+                      )}
+                    </div>
+                    
+                    <h4 className="font-bold text-gray-900 group-hover:text-emerald-700 transition-colors text-base line-clamp-1 mb-1">
+                      {item.title}
+                    </h4>
+                    <p className="text-xs text-slate-500 font-semibold mb-3">
+                      {item.organization} • {item.location || 'Remote'}
+                    </p>
+                    <p className="text-xs text-gray-600 line-clamp-3 mb-4 leading-relaxed">
+                      {item.description}
+                    </p>
+
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      {item.tags?.slice(0, 3).map((tag: string) => (
+                        <span key={tag} className="text-xxs font-bold text-slate-600 bg-[#F1F5F9] px-2 py-1 rounded">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center border-t border-slate-100 pt-3.5 mt-auto">
+                    <span className="text-xxs font-bold text-red-500 bg-red-50 px-2 py-1 rounded-md">
+                      {item.deadline || 'Rolling admission'}
+                    </span>
+                    <a 
+                      href={item.apply_link || item.applyLink || "#"} 
+                      target="_blank"  
+                      rel="noopener noreferrer" 
+                      className="px-3.5 py-1.5 bg-emerald-600 text-white hover:bg-emerald-750 text-xs font-bold rounded-lg transition-colors flex items-center gap-1"
+                    >
+                      Apply / Open
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="clean-card p-12 text-center text-gray-400 bg-white">
+               <p className="text-sm font-semibold mb-2">No matching opportunities found for your query.</p>
+               <p className="text-xs text-gray-500">Try broadening your description or searching with other keywords.</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

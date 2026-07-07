@@ -1,0 +1,29 @@
+services:
+  # The main Express backend service
+  - type: web
+    name: yuvahub-backend
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FRONTEND_URL
+        value: https://yuvahub.vercel.app # Update with your actual Vercel URL
+      - key: MONGO_URI
+        sync: false # Set this securely in the Render dashboard
+      - key: GEMINI_API_KEY
+        sync: false # Set this securely in the Render dashboard
+
+  # The daily background scraper cron job
+  - type: cron
+    name: yuvahub-scraper
+    env: node
+    plan: free
+    schedule: "0 0 * * *" # Runs once every 24 hours (at midnight)
+    buildCommand: npm install && npm run build
+    startCommand: npm run scrape
+    envVars:
+      - key: MONGO_URI
+        sync: false # Set this securely in the Render dashboard

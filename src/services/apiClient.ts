@@ -78,6 +78,21 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 2): P
   }
 }
 
+export async function fetchLatestFeed() {
+  try {
+    const response = await fetchWithRetry(`${API_BASE_URL}/opportunities/latest`, {
+      method: 'GET'
+    });
+    
+    if (!response.ok) throw new Error("API_ERROR");
+    
+    return await response.json();
+  } catch (error) {
+    console.warn("fetchLatestFeed failed", error);
+    return { items: [], num_results: 0 };
+  }
+}
+
 export async function fetchSmartFeed(profile: any, page: number = 1) {
   const cacheKey = "smart_feed";
   try {
@@ -92,7 +107,7 @@ export async function fetchSmartFeed(profile: any, page: number = 1) {
     if (profile?.country) searchParams.append('country', profile.country);
     if (profile?.field) searchParams.append('field', profile.field);
 
-    const url = `${API_BASE_URL}/feed?${searchParams.toString()}`;
+    const url = `${API_BASE_URL}/opportunities?${searchParams.toString()}`;
     const response = await fetchWithRetry(url, {
       method: "GET",
       headers: { "Content-Type": "application/json" }
@@ -228,7 +243,7 @@ export async function chatWithAIMentorBackend(messages: any[], newMessage: strin
 export async function fetchExploreFeed(page: number = 1, limit: number = 20) {
   const cacheKey = "explore_feed";
   try {
-    const url = `${API_BASE_URL}/feed/trending?page=${page}&limit=${limit}`;
+    const url = `${API_BASE_URL}/opportunities/trending?page=${page}&limit=${limit}`;
     const response = await fetchWithRetry(url, {
       method: "GET",
       headers: { "Content-Type": "application/json" }
@@ -320,15 +335,23 @@ export async function searchOpportunities(query: string, type?: string, page: nu
     
     if (!data.results || data.results.length === 0) {
         console.log("DB search empty, using Gemini Scout Protocol...");
+        let geminiSuccess = false;
         try {
            const geminiRes = await geminiService.runScoutProtocol({ tech: query, goal: type }, {});
-           if (geminiRes && geminiRes.results) {
+           if (geminiRes && geminiRes.results && geminiRes.results.length > 0) {
                data.results = geminiRes.results.map((r: any) => ({ ...r, isAI_Supplement: true }));
                data.meta = geminiRes.meta || data.meta;
                data.isAI_Supplement = true;
+               geminiSuccess = true;
            }
         } catch (e) {
-           console.warn("Gemini scout supplement failed", e);
+           console.warn("Gemini scout supplement failed, resorting to static matchers", e);
+        }
+
+        if (!geminiSuccess || !data.results || data.results.length === 0) {
+           const localMatches = getFilteredFallbacks({ field: type }, 6, query);
+           data.results = localMatches.map((item: any) => ({ ...item, isFallback: true }));
+           data.isFallback = true;
         }
     }
     
@@ -340,14 +363,22 @@ export async function searchOpportunities(query: string, type?: string, page: nu
     
     try {
         const geminiRes = await geminiService.runScoutProtocol({ tech: query, goal: type }, {});
-        return { 
-           results: (geminiRes.results || []).map((r: any) => ({ ...r, isAI_Supplement: true })),
-           meta: geminiRes.meta,
-           isFallback: true 
-        };
+        if (geminiRes && geminiRes.results && geminiRes.results.length > 0) {
+          return { 
+             results: geminiRes.results.map((r: any) => ({ ...r, isAI_Supplement: true })),
+             meta: geminiRes.meta,
+             isFallback: true 
+          };
+        }
     } catch(e) {
-        throw error;
+        console.warn("Scout recovery failed completely during exception block", e);
     }
+
+    const localMatches = getFilteredFallbacks({ field: type }, 6, query);
+    return { 
+       results: localMatches.map((item: any) => ({ ...item, isFallback: true })),
+       isFallback: true 
+    };
   }
 }
 
@@ -391,7 +422,7 @@ export async function markAllNotificationsRead() {
 
 export async function fetchSystemStats() {
   try {
-    const response = await fetch(API_BASE_URL.replace('/api/v1', ''));
+    const response = await fetch(`${API_BASE_URL}/health`);
     if (response.ok) return await response.json();
     return null;
   } catch (e) {

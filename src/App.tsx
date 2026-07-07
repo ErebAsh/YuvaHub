@@ -31,6 +31,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [backendReady, setBackendReady] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState(new Date().toLocaleTimeString());
+  const [appSearchQuery, setAppSearchQuery] = useState('');
 
   // Dynamic Routing state based on the HTML5 History API (perfect crawlability)
   const [selectedOppId, setSelectedOppId] = useState<string | null>(() => {
@@ -68,11 +69,38 @@ function App() {
   };
 
   useEffect(() => {
+    const verifyFeedEndpoint = async () => {
+      console.log("=== STARTING /api/v1/opportunities INTEGRITY VERIFICATION ===");
+      try {
+        const response = await fetch("/api/v1/opportunities");
+        console.log(`[Verify Feed] Status: ${response.status} (${response.statusText})`);
+        console.log(`[Verify Feed] Headers:`, [...response.headers.entries()]);
+        
+        const text = await response.text();
+        console.log(`[Verify Feed] Raw Response Snippet:`, text.slice(0, 1000));
+        
+        try {
+          const parsed = JSON.parse(text);
+          console.log(`[Verify Feed] Parsed JSON Successfully! Total items:`, parsed.items?.length || 0);
+          console.log(`[Verify Feed] Response Body Object:`, parsed);
+        } catch (jsonErr) {
+          console.warn(`[Verify Feed] Response is not valid JSON string:`, jsonErr);
+        }
+      } catch (err) {
+        console.error(`[Verify Feed] Network/Operational Error during fetch execution:`, err);
+      }
+      console.log("=== END OF /api/v1/opportunities INTEGRITY VERIFICATION ===");
+    };
+
+    verifyFeedEndpoint();
+
     const checkBackend = async () => {
       const stats = await fetchSystemStats();
       if (stats) {
         setBackendReady(true);
         setLastSyncedTime(new Date().toLocaleTimeString());
+      } else {
+        setBackendReady(false);
       }
     };
     checkBackend();
@@ -128,7 +156,15 @@ function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': return <Dashboard user={user} profile={profile} onViewDetails={viewOpportunity} />;
-      case 'opportunities': return <Opportunities user={user} profile={profile} onViewDetails={viewOpportunity} />;
+      case 'opportunities': return (
+        <Opportunities 
+          user={user} 
+          profile={profile} 
+          onViewDetails={viewOpportunity} 
+          searchQuery={appSearchQuery}
+          setSearchQuery={setAppSearchQuery}
+        />
+      );
       case 'bookmarks': return <Bookmarks user={user} profile={profile} onViewDetails={viewOpportunity} />;
       case 'ai_assistant': return <AIAssistant user={user} profile={profile} />;
       case 'submit': return <SubmitOpportunity user={user} />;
@@ -285,7 +321,7 @@ function App() {
                        {/* SVG Icon using Lucide is imported as Search? Wait, I don't want to break imports, I'll use simple search icon. */}
                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                     </div>
-                    <input type="text" placeholder="Search standard competitions..." className="w-full bg-[#F8FAFC] border-none outline-none rounded-[8px] pl-10 pr-4 py-2 text-[14px]" />
+                    <input type="text" placeholder="Search standard competitions..." className="w-full bg-[#F8FAFC] border border-gray-200 outline-none rounded-[8px] pl-10 pr-4 py-2 text-[14px] focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={appSearchQuery} onChange={(e) => setAppSearchQuery(e.target.value)} />
                  </div>
               ) : (
                  <p className="text-[14px] text-[#64748B] font-medium">

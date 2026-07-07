@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Target, Search, Compass, ShieldCheck, Loader2, ArrowRight, RefreshCw, Sparkles, Share2, FileText } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { UserProfile } from '../../types';
-import { fetchSmartFeed, fetchExploreFeed, trackInteraction, runScoutProtocolBackend, generateApplyAssistBackend } from '../../services/apiClient';
+import { fetchSmartFeed, fetchExploreFeed, trackInteraction, runScoutProtocolBackend, generateApplyAssistBackend, fetchLatestFeed } from '../../services/apiClient';
 import ShareModal from '../ui/ShareModal';
 import ApplyAssistModal from '../ui/ApplyAssistModal';
 
@@ -23,7 +23,7 @@ export default function Dashboard({ user, profile, onViewDetails }: DashboardPro
   const [hasNextPage, setHasNextPage] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [shareOpp, setShareOpp] = useState<{title: string, link: string} | null>(null);
-  const [discoveryMode, setDiscoveryMode] = useState<'smart' | 'explore'>('smart');
+  const [discoveryMode, setDiscoveryMode] = useState<'smart' | 'explore' | 'daily'>('smart');
 
   const [isAssistModalOpen, setIsAssistModalOpen] = useState(false);
   const [assistLoading, setAssistLoading] = useState(false);
@@ -66,7 +66,11 @@ export default function Dashboard({ user, profile, onViewDetails }: DashboardPro
     if (isFirstLoad || force) setLoading(true);
     
     try {
-      const fetchFn = mode === 'smart' ? () => fetchSmartFeed(profile, 1) : () => fetchExploreFeed(1);
+      const fetchFn = mode === 'smart' 
+        ? () => fetchSmartFeed(profile, 1) 
+        : mode === 'daily'
+        ? () => fetchLatestFeed()
+        : () => fetchExploreFeed(1);
       const results = await fetchFn();
       
       setFeedItems(results.items || []);
@@ -81,7 +85,7 @@ export default function Dashboard({ user, profile, onViewDetails }: DashboardPro
   };
 
   const handleLoadMore = async () => {
-    if (loadingMore || !hasNextPage) return;
+    if (loadingMore || !hasNextPage || discoveryMode === 'daily') return;
     setLoadingMore(true);
     try {
       const nextPage = currentPage + 1;
@@ -148,11 +152,21 @@ export default function Dashboard({ user, profile, onViewDetails }: DashboardPro
 
   return (
     <div className="max-w-[1200px] mx-auto space-y-10 pb-12 font-sans px-4 md:px-0">
-      <header className="pt-2">
-        <h2 className="text-[28px] font-[800] tracking-tight text-gray-900 mb-2">
-          Dashboard
-        </h2>
-        <p className="text-[15px] text-[#64748B]">Here is your personalized intelligence briefing.</p>
+      <header className="pt-2 flex justify-between items-start">
+        <div>
+          <h2 className="text-[28px] font-[800] tracking-tight text-gray-900 mb-2">
+            Dashboard
+          </h2>
+          <p className="text-[15px] text-[#64748B]">Here is your personalized intelligence briefing.</p>
+        </div>
+        <button 
+          onClick={() => loadInitialFeed(true)}
+          disabled={loading}
+          className="flex items-center gap-2 bg-white border border-[#E2E8F0] px-4 py-2 rounded-[8px] text-[13px] font-[600] text-[#0F172A] hover:bg-[#F8FAFC] transition-colors shadow-sm disabled:opacity-50"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
       </header>
 
       {/* Stats Row */}
@@ -191,7 +205,7 @@ export default function Dashboard({ user, profile, onViewDetails }: DashboardPro
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h3 className="text-[20px] font-[800] text-gray-900 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-[#F59E0B]" /> Personalized Feed
+              <Sparkles className="w-5 h-5 text-[#F59E0B]" /> {discoveryMode === 'daily' ? "Daily Summary" : "Personalized Feed"}
             </h3>
             {lastUpdated && !loading && (
               <p className="text-[12px] font-[500] text-[#64748B] mt-1.5 flex items-center gap-1.5">
@@ -200,28 +214,38 @@ export default function Dashboard({ user, profile, onViewDetails }: DashboardPro
             )}
           </div>
           
-          <div className="flex items-center gap-4 bg-white p-1 rounded-full shadow-sm border border-[#E2E8F0] relative">
+          <div className="flex items-center gap-2 bg-white p-1 rounded-full shadow-sm border border-[#E2E8F0] relative overflow-hidden">
             <div 
-              className={`absolute inset-y-1 w-[120px] rounded-full bg-[#F1F5F9] transition-all duration-300 ease-out`}
-              style={{ left: discoveryMode === 'smart' ? '4px' : 'calc(100% - 124px)' }}
+              className={`absolute inset-y-1 w-[110px] rounded-full bg-[#F1F5F9] transition-all duration-300 ease-out`}
+              style={{ 
+                 left: discoveryMode === 'smart'     ? '4px' : 
+                       discoveryMode === 'explore'   ? '122px' : 
+                                                       '240px' 
+              }}
             />
             <button
               onClick={() => setDiscoveryMode('smart')}
-              className={`relative w-[120px] z-10 flex items-center justify-center gap-2 py-2 px-3 rounded-full text-[12px] font-[700] uppercase tracking-wide transition-colors ${discoveryMode === 'smart' ? 'text-[#0F172A]' : 'text-[#64748B] hover:text-[#0F172A]'}`}
+              className={`relative w-[110px] z-10 flex items-center justify-center py-2 px-1 rounded-full text-[11px] font-[700] uppercase tracking-wide transition-colors ${discoveryMode === 'smart' ? 'text-[#0F172A]' : 'text-[#64748B] hover:text-[#0F172A]'}`}
             >
               Smart Match
             </button>
             <button
               onClick={() => setDiscoveryMode('explore')}
-              className={`relative w-[120px] z-10 flex items-center justify-center gap-2 py-2 px-3 rounded-full text-[12px] font-[700] uppercase tracking-wide transition-colors ${discoveryMode === 'explore' ? 'text-[#0F172A]' : 'text-[#64748B] hover:text-[#0F172A]'}`}
+              className={`relative w-[110px] z-10 flex items-center justify-center py-2 px-1 rounded-full text-[11px] font-[700] uppercase tracking-wide transition-colors ${discoveryMode === 'explore' ? 'text-[#0F172A]' : 'text-[#64748B] hover:text-[#0F172A]'}`}
             >
               Explore
+            </button>
+            <button
+              onClick={() => setDiscoveryMode('daily')}
+              className={`relative w-[110px] z-10 flex items-center justify-center py-2 px-1 rounded-full text-[11px] font-[700] uppercase tracking-wide transition-colors ${discoveryMode === 'daily' ? 'text-[#0F172A]' : 'text-[#64748B] hover:text-[#0F172A]'}`}
+            >
+              Daily
             </button>
             
             <button 
               onClick={() => loadInitialFeed(true)}
               disabled={loading}
-              className="ml-2 mr-1 w-8 h-8 rounded-full bg-white border border-[#E2E8F0] shadow-sm flex items-center justify-center text-[#2563EB] disabled:opacity-50 hover:bg-[#F8FAFC]"
+              className="ml-2 mr-1 w-8 h-8 z-10 rounded-full bg-white border border-[#E2E8F0] shadow-sm flex items-center justify-center text-[#2563EB] disabled:opacity-50 hover:bg-[#F8FAFC]"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -237,10 +261,17 @@ export default function Dashboard({ user, profile, onViewDetails }: DashboardPro
           <div className="space-y-8 relative">
 
             {/* Fallback Banner */}
-            {feedItems.some(i => i.isFallback) && (
+            {feedItems.some(i => i.isFallback) && discoveryMode !== 'daily' && (
               <div className="bg-[#FFFBEB] border border-[#FEF3C7] px-5 py-4 rounded-[12px] flex items-center gap-3">
                 <Sparkles className="w-5 h-5 shrink-0 text-[#D97706]" />
                 <p className="text-[14px] text-[#92400E] font-[500]">Showing curated opportunities while we refresh new matches ✨</p>
+              </div>
+            )}
+
+            {discoveryMode === 'daily' && (
+              <div className="bg-[#EFF6FF] border border-[#BFDBFE] px-5 py-4 rounded-[12px] flex items-center gap-3">
+                <Sparkles className="w-5 h-5 shrink-0 text-[#2563EB]" />
+                <p className="text-[14px] text-[#1E3A8A] font-[500]">Here are the latest fresh opportunities discovered within the past 24 hours.</p>
               </div>
             )}
 
@@ -352,21 +383,23 @@ export default function Dashboard({ user, profile, onViewDetails }: DashboardPro
                })}
             </div>
             
-            <div className="flex justify-center pt-8">
-              <button 
-                onClick={handleLoadMore}
-                disabled={loadingMore || !hasNextPage}
-                className="bg-white border-[1.5px] border-[#E2E8F0] text-[#0F172A] px-8 py-3 rounded-[12px] text-[14px] font-[700] flex items-center gap-2 hover:bg-[#F8FAFC] transition-colors disabled:opacity-50"
-              >
-                {loadingMore ? (
-                  <><div className="w-4 h-4 border-2 border-[#0F172A] border-t-transparent rounded-full animate-spin"></div> Loading...</>
-                ) : !hasNextPage ? (
-                  <>You're all caught up!</>
-                ) : (
-                  <>Load More Results</>
-                )}
-              </button>
-            </div>
+            {discoveryMode !== 'daily' && (
+              <div className="flex justify-center pt-8">
+                <button 
+                  onClick={handleLoadMore}
+                  disabled={loadingMore || !hasNextPage}
+                  className="bg-white border-[1.5px] border-[#E2E8F0] text-[#0F172A] px-8 py-3 rounded-[12px] text-[14px] font-[700] flex items-center gap-2 hover:bg-[#F8FAFC] transition-colors disabled:opacity-50"
+                >
+                  {loadingMore ? (
+                    <><div className="w-4 h-4 border-2 border-[#0F172A] border-t-transparent rounded-full animate-spin"></div> Loading...</>
+                  ) : !hasNextPage ? (
+                    <>You're all caught up!</>
+                  ) : (
+                    <>Load More Results</>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="bg-white border border-[#E2E8F0] rounded-[16px] py-20 px-6 text-center shadow-sm">
@@ -380,6 +413,20 @@ export default function Dashboard({ user, profile, onViewDetails }: DashboardPro
             </button>
           </div>
         )}
+      </div>
+
+      {/* Newsletter Signup */}
+      <div className="mt-12 bg-white border border-[#E2E8F0] rounded-[16px] p-8 text-center shadow-sm relative overflow-hidden mb-8">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#2563EB] to-[#4F46E5]"></div>
+        <div className="w-16 h-16 bg-[#EFF6FF] rounded-full flex items-center justify-center mx-auto mb-4 border border-[#DBEAFE]">
+           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#2563EB]"><path d="M22 17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9.5C2 7 4 5 6.5 5H18c2.2 0 4 1.8 4 4v8Z"></path><polyline points="15,9 18,9 18,11"></polyline><path d="M5.5 19C7.4 19 9 17.4 9 15.5S7.4 12 5.5 12"></path><polyline points="2 5 12 12 22 5"></polyline></svg>
+        </div>
+        <h3 className="text-[22px] font-[800] text-gray-900 mb-2">Stay Updated</h3>
+        <p className="text-[15px] text-[#64748B] max-w-md mx-auto mb-6">Get the latest opportunities right in your inbox.</p>
+        <form onSubmit={(e) => { e.preventDefault(); alert("Thanks for subscribing!"); }} className="flex flex-col sm:flex-row max-w-md mx-auto gap-3">
+           <input type="email" placeholder="Email address" required className="flex-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-[8px] px-4 py-3 text-[15px] text-gray-900 outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] transition-all placeholder:text-[#94A3B8]" />
+           <button type="submit" className="bg-[#0F172A] text-white px-8 py-3 rounded-[8px] text-[15px] font-[700] hover:bg-gray-800 transition-colors whitespace-nowrap">Join</button>
+        </form>
       </div>
 
       <ShareModal 
