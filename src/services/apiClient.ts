@@ -9,8 +9,42 @@ import { getFilteredFallbacks } from './staticFallbacks';
 
 const API_BASE_URL = "/api/v1";
 
-// Simple persistent cache for fallbacks
+class LRUCache<K, V> {
+  private capacity: number;
+  private cache: Map<K, { value: V; timestamp: number }>;
+
+  constructor(capacity: number) {
+    this.capacity = capacity;
+    this.cache = new Map();
+  }
+
+  get(key: K): V | undefined {
+    if (!this.cache.has(key)) return undefined;
+    
+    const item = this.cache.get(key)!;
+    // Refresh the item's position
+    this.cache.delete(key);
+    this.cache.set(key, item);
+    return item.value;
+  }
+
+  set(key: K, value: V) {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.capacity) {
+      // Remove the first (least recently used) item
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey) this.cache.delete(firstKey);
+    }
+    this.cache.set(key, { value, timestamp: Date.now() });
+  }
+}
+
+const memoryCache = new LRUCache<string, any>(50); // Store up to 50 feeds/queries
+
+// Two-tier cache: LRU in-memory + persistent localStorage fallback
 const saveToCache = (key: string, data: any) => {
+  memoryCache.set(key, data);
   try {
     localStorage.setItem(`cache_${key}`, JSON.stringify({
       data,
@@ -22,9 +56,16 @@ const saveToCache = (key: string, data: any) => {
 };
 
 const getFromCache = (key: string) => {
+  const mem = memoryCache.get(key);
+  if (mem) return mem;
+
   try {
     const cached = localStorage.getItem(`cache_${key}`);
-    if (cached) return JSON.parse(cached).data;
+    if (cached) {
+      const parsed = JSON.parse(cached).data;
+      memoryCache.set(key, parsed);
+      return parsed;
+    }
   } catch (e) {
     return null;
   }
