@@ -26,10 +26,14 @@ export default function Opportunities({
   
   // Filter states
   const [filters, setFilters] = useState({
-    status: { 'Live': true, 'Upcoming': false, 'Closed': false },
-    type: { 'Hackathons': true, 'Quizzes': true, 'Internships': false, 'Jobs': false },
-    eligibility: { 'College Students': true, 'Professionals': false }
+    status: { 'Live': true, 'Upcoming': false, 'Closed': false, 'Closing Soon': false },
+    type: { 'Hackathons': true, 'Quizzes': true, 'Internships': false, 'Jobs': false, 'Scholarships': false, 'Mentorships': false },
+    eligibility: { 'College Students': true, 'Professionals': false, 'High School': false },
+    location: { 'Remote': false, 'On-site': false },
+    cost: { 'Free': false, 'Paid': false }
   });
+  
+  const [sortBy, setSortBy] = useState('Most relevant');
 
   const fetchData = async (q: string) => {
     setLoading(true);
@@ -54,24 +58,68 @@ export default function Opportunities({
 
   const clearFilters = () => {
     setFilters({
-      status: { 'Live': false, 'Upcoming': false, 'Closed': false },
-      type: { 'Hackathons': false, 'Quizzes': false, 'Internships': false, 'Jobs': false },
-      eligibility: { 'College Students': false, 'Professionals': false }
+      status: { 'Live': false, 'Upcoming': false, 'Closed': false, 'Closing Soon': false },
+      type: { 'Hackathons': false, 'Quizzes': false, 'Internships': false, 'Jobs': false, 'Scholarships': false, 'Mentorships': false },
+      eligibility: { 'College Students': false, 'Professionals': false, 'High School': false },
+      location: { 'Remote': false, 'On-site': false },
+      cost: { 'Free': false, 'Paid': false }
     });
+    setSortBy('Most relevant');
   };
 
   const filteredResults = React.useMemo(() => {
     if (!searchData || !searchData.results) return [];
     const query = qVal.trim().toLowerCase();
-    if (!query) return searchData.results;
     
-    return searchData.results.filter((opp: any) => {
-      const titleMatch = (opp.title || "").toLowerCase().includes(query);
-      const categoryMatch = (opp.category || "").toLowerCase().includes(query);
-      const descMatch = (opp.description || "").toLowerCase().includes(query);
-      return titleMatch || categoryMatch || descMatch;
+    let results = searchData.results;
+
+    if (query) {
+      results = results.filter((opp: any) => {
+        const titleMatch = (opp.title || "").toLowerCase().includes(query);
+        const categoryMatch = (opp.category || "").toLowerCase().includes(query);
+        const descMatch = (opp.description || "").toLowerCase().includes(query);
+        return titleMatch || categoryMatch || descMatch;
+      });
+    }
+
+    // Apply Location Filter
+    if (filters.location['Remote'] || filters.location['On-site']) {
+      results = results.filter((opp: any) => {
+        const isRemote = (opp.location || '').toLowerCase().includes('remote');
+        if (filters.location['Remote'] && isRemote) return true;
+        if (filters.location['On-site'] && !isRemote) return true;
+        return false;
+      });
+    }
+
+    // Apply Cost Filter
+    if (filters.cost['Free'] || filters.cost['Paid']) {
+      results = results.filter((opp: any) => {
+        const isFree = !opp.price || (opp.price || '').toLowerCase() === 'free' || opp.price === 0;
+        if (filters.cost['Free'] && isFree) return true;
+        if (filters.cost['Paid'] && !isFree) return true;
+        return false;
+      });
+    }
+    
+    // Sort Results
+    results = [...results].sort((a: any, b: any) => {
+      if (sortBy === 'Newest') {
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      }
+      if (sortBy === 'Recently updated') {
+        return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
+      }
+      if (sortBy === 'Deadline') {
+        if (!a.deadline) return 1;
+        if (!b.deadline) return -1;
+        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+      }
+      return 0; // Most relevant (default DB sorting)
     });
-  }, [searchData, qVal]);
+
+    return results;
+  }, [searchData, qVal, filters, sortBy]);
 
   const getThumbStyle = (type: string) => {
     const t = (type || '').toLowerCase();
@@ -140,6 +188,32 @@ export default function Opportunities({
                   ))}
                </div>
             </div>
+
+            {/* Location */}
+            <div>
+               <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] mb-4">Location</h3>
+               <div className="space-y-2.5">
+                  {Object.keys(filters.location).map(k => (
+                     <label key={k} className="flex items-center gap-3 cursor-pointer group">
+                        <input type="checkbox" checked={(filters.location as any)[k]} onChange={(e) => setFilters(f => ({...f, location: {...f.location, [k]: e.target.checked}}))} className="w-4 h-4 rounded border-gray-300 text-[#2563EB] focus:ring-[#2563EB]" />
+                        <span className="text-[13px] text-[#0F172A] group-hover:text-[#2563EB] transition-colors">{k}</span>
+                     </label>
+                  ))}
+               </div>
+            </div>
+
+            {/* Cost */}
+            <div>
+               <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] mb-4">Cost</h3>
+               <div className="space-y-2.5">
+                  {Object.keys(filters.cost).map(k => (
+                     <label key={k} className="flex items-center gap-3 cursor-pointer group">
+                        <input type="checkbox" checked={(filters.cost as any)[k]} onChange={(e) => setFilters(f => ({...f, cost: {...f.cost, [k]: e.target.checked}}))} className="w-4 h-4 rounded border-gray-300 text-[#2563EB] focus:ring-[#2563EB]" />
+                        <span className="text-[13px] text-[#0F172A] group-hover:text-[#2563EB] transition-colors">{k}</span>
+                     </label>
+                  ))}
+               </div>
+            </div>
          </div>
 
          <button onClick={clearFilters} className="mt-10 w-full py-2.5 border-[1.5px] border-[#E2E8F0] text-[#2563EB] text-[13px] font-bold rounded-[8px] hover:bg-[#EFF6FF] transition-colors">
@@ -150,19 +224,34 @@ export default function Opportunities({
       {/* Main Content */}
       <main className="flex-1 min-w-0">
          
-         <div className="flex justify-between items-end mb-6">
+         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
            <div className="hidden md:block">
              <h2 className="text-[24px] font-[800] tracking-tight text-gray-900 mb-1">Opportunities Explorer</h2>
              <p className="text-[14px] text-[#64748B]">Browse and filter the complete live database.</p>
            </div>
-           <button 
-             onClick={() => fetchData(qVal)}
-             disabled={loading}
-             className="flex items-center gap-2 bg-white border border-[#E2E8F0] px-4 py-2 rounded-[8px] text-[13px] font-[600] text-[#0F172A] hover:bg-[#F8FAFC] transition-colors shadow-sm disabled:opacity-50"
-           >
-             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-             Refresh
-           </button>
+           
+           <div className="flex items-center gap-3 w-full md:w-auto">
+             {/* Sort Select */}
+             <select 
+               value={sortBy}
+               onChange={(e) => setSortBy(e.target.value)}
+               className="bg-white border border-[#E2E8F0] px-3 py-2 rounded-[8px] text-[13px] text-[#0F172A] outline-none focus:ring-2 focus:ring-[#2563EB] flex-1 md:flex-none"
+             >
+               <option value="Most relevant">Most relevant</option>
+               <option value="Newest">Newest</option>
+               <option value="Deadline">Deadline</option>
+               <option value="Recently updated">Recently updated</option>
+             </select>
+
+             <button 
+               onClick={() => fetchData(qVal)}
+               disabled={loading}
+               className="flex items-center gap-2 bg-white border border-[#E2E8F0] px-4 py-2 rounded-[8px] text-[13px] font-[600] text-[#0F172A] hover:bg-[#F8FAFC] transition-colors shadow-sm disabled:opacity-50"
+             >
+               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+               <span className="hidden sm:inline">Refresh</span>
+             </button>
+           </div>
          </div>
 
          {/* Search Header for Mobile */}
