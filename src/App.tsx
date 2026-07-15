@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { LayoutDashboard, Globe, PlusCircle, Users, User, Menu, X, Activity, Bookmark, Sparkles, MessageSquare, Settings } from 'lucide-react';
+import { LayoutDashboard, Globe, PlusCircle, Users, User, Menu, X, Activity, Bookmark, Sparkles, MessageSquare, Settings, Sun, Moon } from 'lucide-react';
 import { signInWithGoogle, logout } from './lib/firebase';
 import { UserProfile } from './types';
 import { useAppContext } from './context/AppContext';
@@ -35,7 +35,9 @@ function App() {
     appSearchQuery,
     setAppSearchQuery,
     selectedOppId,
-    clearSelectedOpportunity
+    clearSelectedOpportunity,
+    theme,
+    toggleTheme
   } = useAppContext();
 
   // WebMCP Integration
@@ -136,15 +138,15 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 text-gray-900 font-sans overflow-hidden">
+    <div className="flex h-screen bg-gray-50 text-gray-900 font-sans overflow-hidden dark:bg-gray-900 dark:text-gray-100">
       
       {/* Sidebar Desktop - Fixed 220px */}
-      <aside className="hidden lg:flex w-55 border-r border-[#E2E8F0] flex-col bg-white z-10 shrink-0 relative">
+      <aside className="hidden lg:flex w-55 border-r border-[#E2E8F0] dark:border-gray-700 flex-col bg-white dark:bg-gray-800 z-10 shrink-0 relative">
         <div className="p-6 border-b border-[#E2E8F0] flex items-center justify-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-[#2563EB] flex items-center justify-center">
              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
           </div>
-          <h1 className="text-lg font-bold tracking-tight text-gray-900">
+          <h1 className="text-lg font-bold tracking-tight text-gray-900 dark:text-white">
             YuvaHub
           </h1>
         </div>
@@ -159,7 +161,7 @@ function App() {
                   setActiveTab(tab.id);
                   clearSelectedOpportunity();
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all rounded-lg ${isActive ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-l-4 border-transparent'}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all rounded-lg ${isActive ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400 border-l-4 border-blue-600' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white border-l-4 border-transparent'}`}
                 style={{ borderLeftWidth: isActive ? '4px' : '0px', paddingLeft: isActive ? '12px' : '16px' }}
               >
                 <Icon className={`w-5 h-5 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
@@ -168,10 +170,19 @@ function App() {
             )
           })}
         </nav>
-        <div className="p-4 border-t border-gray-100">
+        <div className="px-4 pt-4">
+          <button
+            onClick={toggleTheme}
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+          >
+            {theme === 'dark' ? <Sun className="w-5 h-5 text-gray-400" /> : <Moon className="w-5 h-5 text-gray-400" />}
+            {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+          </button>
+        </div>
+        <div className="p-4 border-t border-gray-100 dark:border-gray-700">
           {user ? (
             <div className="flex flex-col gap-3">
-              <span className="text-xs text-gray-500 font-medium truncate px-2">{user.email}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium truncate px-2">{user.email}</span>
               <button onClick={logout} className="clean-btn-outline w-full py-2 text-sm">Logout</button>
             </div>
           ) : (
@@ -183,18 +194,18 @@ function App() {
       </aside>
 
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 border-b border-gray-200 bg-white z-50 flex items-center justify-between px-4">
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 z-50 flex items-center justify-between px-4">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-[#2563EB] flex items-center justify-center">
              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
           </div>
-          <h1 className="text-lg font-bold tracking-tight text-gray-900">
+          <h1 className="text-lg font-bold tracking-tight text-gray-900 dark:text-white">
             YuvaHub
           </h1>
         </div>
         <div className="flex items-center gap-4">
           <NotificationDropdown profile={profile} />
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-gray-500 hover:text-gray-900">
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
             {isMobileMenuOpen ? <X /> : <Menu />}
           </button>
         </div>
@@ -202,7 +213,7 @@ function App() {
 
       {/* Mobile Menu */}
       {isMobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 top-16 bg-white z-40 p-4 border-b border-gray-200 overflow-y-auto">
+        <div className="lg:hidden fixed inset-0 top-16 bg-white dark:bg-gray-900 z-40 p-4 border-b border-gray-200 dark:border-gray-700 overflow-y-auto">
           <nav className="space-y-2">
             {TABS.map(tab => {
               const Icon = tab.icon;
@@ -215,14 +226,21 @@ function App() {
                     clearSelectedOpportunity();
                     setIsMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3 px-4 py-4 text-sm font-medium transition-all rounded-lg ${isActive ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-600' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}
+                  className={`w-full flex items-center gap-3 px-4 py-4 text-sm font-medium transition-all rounded-lg ${isActive ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400 border-l-4 border-blue-600' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border-l-4 border-transparent'}`}
                 >
                   <Icon className="w-5 h-5" />
                   {tab.label}
                 </button>
               )
             })}
-            <div className="pt-6 mt-6 border-t border-gray-100">
+            <button
+              onClick={toggleTheme}
+              className="w-full flex items-center gap-3 px-4 py-4 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+            </button>
+            <div className="pt-6 mt-6 border-t border-gray-100 dark:border-gray-700">
               {user ? (
                 <button onClick={() => { logout(); setIsMobileMenuOpen(false); }} className="clean-btn-outline w-full py-3 text-sm">Logout</button>
               ) : (
@@ -238,17 +256,17 @@ function App() {
       <main className="flex-1 flex flex-col pt-16 lg:pt-0 h-screen overflow-hidden relative">
         
         {/* Topbar */}
-        <div className="hidden lg:flex h-[60px] border-b border-[#E2E8F0] bg-white items-center justify-between px-6 shrink-0">
+        <div className="hidden lg:flex h-[60px] border-b border-[#E2E8F0] dark:border-gray-700 bg-white dark:bg-gray-800 items-center justify-between px-6 shrink-0">
            <div className="flex-1 max-w-[500px] ml-8 mr-8">
               {activeTab === 'opportunities' ? (
                  <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                     </div>
-                    <input type="text" placeholder="Search standard competitions..." className="w-full bg-[#F8FAFC] border border-gray-200 outline-none rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={appSearchQuery} onChange={(e) => setAppSearchQuery(e.target.value)} />
+                    <input type="text" placeholder="Search standard competitions..." className="w-full bg-[#F8FAFC] dark:bg-gray-700 border border-gray-200 dark:border-gray-600 outline-none rounded-lg pl-10 pr-4 py-2 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={appSearchQuery} onChange={(e) => setAppSearchQuery(e.target.value)} />
                  </div>
               ) : (
-                 <p className="text-sm text-[#64748B] font-medium">
+                 <p className="text-sm text-[#64748B] dark:text-gray-400 font-medium">
                    {selectedOppId 
                      ? "Detail Overview" 
                      : (user ? `Welcome back, ${profile?.name || user.displayName || 'Student'}` : 'Welcome to YuvaHub')

@@ -22,6 +22,8 @@ interface AppContextType {
   setSelectedOppId: (id: string | null) => void;
   viewOpportunity: (id: string, title?: string) => void;
   clearSelectedOpportunity: () => void;
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -35,14 +37,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [backendReady, setBackendReady] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState(new Date().toLocaleTimeString());
   const [appSearchQuery, setAppSearchQuery] = useState('');
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const savedTheme = localStorage.getItem('yuvahub-theme');
+    return savedTheme === 'dark' ? 'dark' : 'light';
+  });
 
-  // Routing state
   const [selectedOppId, setSelectedOppId] = useState<string | null>(() => {
     const oppMatch = window.location.pathname.match(/^\/opportunity\/([^/]+)/);
     return oppMatch ? oppMatch[1] : null;
   });
 
-  // Verify API integrity and monitor backend readiness
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('yuvahub-theme', theme);
+  }, [theme]);
+
   useEffect(() => {
     const verifyFeedEndpoint = async () => {
       try {
@@ -71,7 +85,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearInterval(interval);
   }, []);
 
-  // Listen to popstate changes (browser forward/back navigation)
   useEffect(() => {
     const handleLocationChange = () => {
       const oppMatch = window.location.pathname.match(/^\/opportunity\/([^/]+)/);
@@ -87,7 +100,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Firebase auth sync
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -145,6 +157,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => unsubscribe();
   }, []);
 
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+  };
+
   const viewOpportunity = (id: string, title?: string) => {
     const cleanTitle = title 
       ? title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
@@ -175,7 +191,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       selectedOppId,
       setSelectedOppId,
       viewOpportunity,
-      clearSelectedOpportunity
+      clearSelectedOpportunity,
+      theme,
+      toggleTheme
     }}>
       {children}
     </AppContext.Provider>
