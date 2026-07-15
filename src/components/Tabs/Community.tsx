@@ -4,8 +4,10 @@ import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, limit 
 import { Trophy, Megaphone, HelpCircle, Link as LinkIcon, Send, Heart, MessageSquare, Loader2 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { EmptyState, ErrorState, SkeletonCard } from '../ui/states';
+import { useAppContext } from '../../context/AppContext';
 
-export default function Community({ user, profile }: { user: any, profile: UserProfile | null }) {
+export default function Community() {
+  const { user, profile } = useAppContext();
   const [posts, setPosts] = useState<any[]>([]);
   const [postContent, setPostContent] = useState('');
   const [postType, setPostType] = useState('Win');

@@ -6,14 +6,10 @@ import { fetchSmartFeed, fetchExploreFeed, trackInteraction, runScoutProtocolBac
 import { ErrorState } from '../ui/states';
 import ShareModal from '../ui/ShareModal';
 import ApplyAssistModal from '../ui/ApplyAssistModal';
+import { useAppContext } from '../../context/AppContext';
 
-interface DashboardProps {
-  user: any;
-  profile: UserProfile | null;
-  onViewDetails?: (id: string, title?: string) => void;
-}
-
-export default function Dashboard({ user, profile, onViewDetails }: DashboardProps) {
+export default function Dashboard() {
+  const { user, profile, viewOpportunity: onViewDetails } = useAppContext();
   const [showScoutModal, setShowScoutModal] = useState(false);
   const [scoutStep, setScoutStep] = useState(1);
   const [scoutData, setScoutData] = useState({ year: '', field: '', tech: '', goal: '' });

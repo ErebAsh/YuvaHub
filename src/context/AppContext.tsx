@@ -1,0 +1,166 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
+import { UserProfile } from '../types';
+import { fetchSystemStats } from '../services/apiClient';
+
+interface AppContextType {
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+  isMobileMenuOpen: boolean;
+  setIsMobileMenuOpen: (open: boolean) => void;
+  user: any;
+  profile: UserProfile | null;
+  setProfile: (profile: UserProfile | null) => void;
+  loading: boolean;
+  backendReady: boolean;
+  lastSyncedTime: string;
+  appSearchQuery: string;
+  setAppSearchQuery: (query: string) => void;
+  selectedOppId: string | null;
+  setSelectedOppId: (id: string | null) => void;
+  viewOpportunity: (id: string, title?: string) => void;
+  clearSelectedOpportunity: () => void;
+}
+
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [backendReady, setBackendReady] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState(new Date().toLocaleTimeString());
+  const [appSearchQuery, setAppSearchQuery] = useState('');
+
+  // Routing state
+  const [selectedOppId, setSelectedOppId] = useState<string | null>(() => {
+    const oppMatch = window.location.pathname.match(/^\/opportunity\/([^/]+)/);
+    return oppMatch ? oppMatch[1] : null;
+  });
+
+  // Verify API integrity and monitor backend readiness
+  useEffect(() => {
+    const verifyFeedEndpoint = async () => {
+      try {
+        const response = await fetch("/api/v1/opportunities");
+        const text = await response.text();
+        try {
+          JSON.parse(text);
+        } catch {}
+      } catch (err) {
+        console.error(`[Verify Feed] Error:`, err);
+      }
+    };
+    verifyFeedEndpoint();
+
+    const checkBackend = async () => {
+      const stats = await fetchSystemStats();
+      if (stats) {
+        setBackendReady(true);
+        setLastSyncedTime(new Date().toLocaleTimeString());
+      } else {
+        setBackendReady(false);
+      }
+    };
+    checkBackend();
+    const interval = setInterval(checkBackend, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Listen to popstate changes (browser forward/back navigation)
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const oppMatch = window.location.pathname.match(/^\/opportunity\/([^/]+)/);
+      if (oppMatch) {
+         setSelectedOppId(oppMatch[1]);
+      } else {
+         setSelectedOppId(null);
+      }
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+    };
+  }, []);
+
+  // Firebase auth sync
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        try {
+          const docRef = doc(db, 'users', currentUser.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setProfile(docSnap.data() as UserProfile);
+          } else {
+            setProfile({
+              uid: currentUser.uid,
+              name: currentUser.displayName || '',
+              email: currentUser.email || ''
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching user profile:", error);
+          setProfile({
+            uid: currentUser.uid,
+            name: currentUser.displayName || '',
+            email: currentUser.email || ''
+          });
+        }
+      } else {
+        setProfile(null);
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const viewOpportunity = (id: string, title?: string) => {
+    const cleanTitle = title 
+      ? title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+      : "view";
+    window.history.pushState(null, '', `/opportunity/${id}/${cleanTitle}`);
+    setSelectedOppId(id);
+  };
+
+  const clearSelectedOpportunity = () => {
+    window.history.pushState(null, '', '/');
+    setSelectedOppId(null);
+  };
+
+  return (
+    <AppContext.Provider value={{
+      activeTab,
+      setActiveTab,
+      isMobileMenuOpen,
+      setIsMobileMenuOpen,
+      user,
+      profile,
+      setProfile,
+      loading,
+      backendReady,
+      lastSyncedTime,
+      appSearchQuery,
+      setAppSearchQuery,
+      selectedOppId,
+      setSelectedOppId,
+      viewOpportunity,
+      clearSelectedOpportunity
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+export const useAppContext = () => {
+  const context = useContext(AppContext);
+  if (context === undefined) {
+    throw new Error('useAppContext must be used within an AppProvider');
+  }
+  return context;
+};

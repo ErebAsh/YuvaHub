@@ -38,7 +38,10 @@ try {
 
 const createFailOpenStore = (prefix: string) => {
   const store = new RedisStore({
-    sendCommand: (...args: string[]) => redisClient.call(...args),
+    sendCommand: (...args: string[]) => {
+      const [command, ...commandArgs] = args;
+      return redisClient.call(command, ...commandArgs) as Promise<any>;
+    },
     prefix: prefix,
   });
 
@@ -456,11 +459,12 @@ class MemoryCollection {
       });
     }
 
-    return {
-      sort: () => this,
-      limit: (n: number) => { result = result.slice(0, n); return this; },
+    const cursor = {
+      sort: () => cursor,
+      limit: (n: number) => { result = result.slice(0, n); return cursor; },
       toArray: async () => result
     };
+    return cursor;
   }
   async findOne(query: any) {
     const res = await this.find(query).toArray();
@@ -1590,7 +1594,7 @@ Return JSON strictly in this format:
       res.status(201).json({ id: result.insertedId, ...parsedData });
     } catch (err: any) {
       if (err instanceof z.ZodError) {
-        return res.status(400).json({ error: "Validation failed", details: err.errors });
+        return res.status(400).json({ error: "Validation failed", details: err.issues });
       }
       res.status(500).json({ error: "Internal Server Error" });
     }
@@ -1667,7 +1671,7 @@ Return JSON strictly in this format:
       res.json({ success: true, updated: true });
     } catch (err: any) {
       if (err instanceof z.ZodError) {
-        return res.status(400).json({ error: "Validation failed", details: err.errors });
+        return res.status(400).json({ error: "Validation failed", details: err.issues });
       }
       res.status(500).json({ error: "Internal Server Error" });
     }
@@ -1758,7 +1762,7 @@ ${JSON.stringify(userProfile, null, 2)}
     } catch (err: any) {
       console.error("AI Validation Error:", err);
       if (err instanceof z.ZodError) {
-         return res.status(502).json({ error: "AI generated invalid schema", details: err.errors });
+         return res.status(502).json({ error: "AI generated invalid schema", details: err.issues });
       }
       res.status(500).json({ error: "Internal Server Error during validation" });
     }

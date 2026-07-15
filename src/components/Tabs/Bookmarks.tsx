@@ -3,14 +3,10 @@ import { Bookmark as BookmarkIcon } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { fetchOpportunityById } from '../../services/apiClient';
 import { AsyncState } from '../ui/states';
+import { useAppContext } from '../../context/AppContext';
 
-interface BookmarksProps {
-  user: any;
-  profile: UserProfile | null;
-  onViewDetails: (id: string, title?: string) => void;
-}
-
-export default function Bookmarks({ user, profile, onViewDetails }: BookmarksProps) {
+export default function Bookmarks() {
+  const { user, profile, viewOpportunity: onViewDetails } = useAppContext();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [retrying, setRetrying] = useState(false);

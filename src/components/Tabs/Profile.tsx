@@ -4,8 +4,10 @@ import { db } from '../../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { UserProfile } from '../../types';
 import { ErrorState } from '../ui/states';
+import { useAppContext } from '../../context/AppContext';
 
-export default function Profile({ user, profile, setProfile }: { user: any, profile: UserProfile | null, setProfile: (p: UserProfile) => void }) {
+export default function Profile() {
+  const { user, profile, setProfile } = useAppContext();
   const [formData, setFormData] = useState<UserProfile>(profile || {
     uid: user?.uid || '', name: user?.displayName || '', email: user?.email || '',
     college: '', year: '', field: '', city: '', state: '', country: '', phone: '',

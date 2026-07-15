@@ -5,8 +5,10 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ChatMessage } from '../../types';
 import { chatWithAIMentorBackend } from '../../services/apiClient';
 import { ErrorState } from '../ui/states';
+import { useAppContext } from '../../context/AppContext';
 
-export default function Mentorship({ user }: { user: any }) {
+export default function Mentorship() {
+  const { user } = useAppContext();
   const [view, setView] = useState<'ai' | 'human'>('ai');
 
   return (

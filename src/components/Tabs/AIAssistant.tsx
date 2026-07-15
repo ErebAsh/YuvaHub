@@ -3,13 +3,10 @@ import { FileText, Bot, Briefcase, GraduationCap, Sparkles, ChevronRight, CheckC
 import { UserProfile } from '../../types';
 import * as geminiService from '../../services/gemini';
 import { ErrorState } from '../ui/states';
+import { useAppContext } from '../../context/AppContext';
 
-interface AIAssistantProps {
-  user: any;
-  profile: UserProfile | null;
-}
-
-export default function AIAssistant({ user, profile }: AIAssistantProps) {
+export default function AIAssistant() {
+  const { user, profile } = useAppContext();
   const [activeModule, setActiveModule] = useState<string | null>(null);
   
   const modules = [

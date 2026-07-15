@@ -3,24 +3,19 @@ import { Search, Filter, Users, ChevronRight, Clock, Star, Share2, Copy, Refresh
 import { UserProfile } from '../../types';
 import { searchOpportunities, trackInteraction } from '../../services/apiClient';
 import { AsyncState } from '../ui/states';
+import { useAppContext } from '../../context/AppContext';
 
-export default function Opportunities({ 
-  user, 
-  profile, 
-  onViewDetails,
-  searchQuery,
-  setSearchQuery
-}: { 
-  user: any, 
-  profile: UserProfile | null, 
-  onViewDetails?: (id: string, title?: string) => void,
-  searchQuery?: string,
-  setSearchQuery?: React.Dispatch<React.SetStateAction<string>>
-}) {
-  const [localSearchQuery, setLocalSearchQuery] = useState('');
-  
-  const qVal = searchQuery !== undefined ? searchQuery : localSearchQuery;
-  const setQVal = setSearchQuery !== undefined ? setSearchQuery : setLocalSearchQuery;
+export default function Opportunities() {
+  const {
+    user,
+    profile,
+    viewOpportunity: onViewDetails,
+    appSearchQuery: searchQuery,
+    setAppSearchQuery: setSearchQuery
+  } = useAppContext();
+
+  const qVal = searchQuery;
+  const setQVal = setSearchQuery;
 
   const [searchData, setSearchData] = useState<any>(null);
   const [loading, setLoading] = useState(true);

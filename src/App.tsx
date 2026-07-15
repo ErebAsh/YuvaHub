@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Globe, PlusCircle, Users, User, Menu, X, Github, Linkedin, Instagram, Twitter, Bell, MessageSquare, Settings, Activity, Bookmark, Sparkles, BrainCircuit } from 'lucide-react';
-import { auth, signInWithGoogle, logout, db } from './lib/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import React, { useEffect } from 'react';
+import { LayoutDashboard, Globe, PlusCircle, Users, User, Menu, X, Activity, Bookmark, Sparkles, MessageSquare, Settings } from 'lucide-react';
+import { signInWithGoogle, logout } from './lib/firebase';
 import { UserProfile } from './types';
-import { fetchSystemStats } from './services/apiClient';
+import { useAppContext } from './context/AppContext';
 
 // Tab/View Components
 import Dashboard from './components/Tabs/Dashboard';
@@ -17,29 +15,28 @@ import Bookmarks from './components/Tabs/Bookmarks';
 import SettingsTab from './components/Tabs/Settings';
 import AdminDashboard from './components/Admin/AdminDashboard';
 import NotificationDropdown from './components/ui/NotificationDropdown';
-import { OfflineBanner } from './components/ui/states';
 import OpportunityDetail from './components/Tabs/OpportunityDetail';
 import AIAssistant from './components/Tabs/AIAssistant';
-
-import SplashAuth from './components/SplashAuth';
 import OnboardingFlow from './components/OnboardingFlow';
+import SplashAuth from './components/SplashAuth';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [backendReady, setBackendReady] = useState(false);
-  const [offlineBannerDismissed, setOfflineBannerDismissed] = useState(false);
-  const [lastSyncedTime, setLastSyncedTime] = useState(new Date().toLocaleTimeString());
-  const [appSearchQuery, setAppSearchQuery] = useState('');
-
-  // Dynamic Routing state based on the HTML5 History API (perfect crawlability)
-  const [selectedOppId, setSelectedOppId] = useState<string | null>(() => {
-    const oppMatch = window.location.pathname.match(/^\/opportunity\/([^/]+)/);
-    return oppMatch ? oppMatch[1] : null;
-  });
+  const {
+    activeTab,
+    setActiveTab,
+    isMobileMenuOpen,
+    setIsMobileMenuOpen,
+    user,
+    profile,
+    setProfile,
+    loading,
+    backendReady,
+    lastSyncedTime,
+    appSearchQuery,
+    setAppSearchQuery,
+    selectedOppId,
+    clearSelectedOpportunity
+  } = useAppContext();
 
   // WebMCP Integration
   useEffect(() => {
@@ -78,114 +75,7 @@ function App() {
         abortController.abort();
       }
     };
-  }, []);
-
-  // Track popstate changes (back and forward buttons on browsers)
-  useEffect(() => {
-    const handleLocationChange = () => {
-      const oppMatch = window.location.pathname.match(/^\/opportunity\/([^/]+)/);
-      if (oppMatch) {
-         setSelectedOppId(oppMatch[1]);
-      } else {
-         setSelectedOppId(null);
-      }
-    };
-    window.addEventListener('popstate', handleLocationChange);
-    return () => {
-      window.removeEventListener('popstate', handleLocationChange);
-    };
-  }, []);
-
-  const viewOpportunity = (id: string, title?: string) => {
-    const cleanTitle = title 
-      ? title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
-      : "view";
-    window.history.pushState(null, '', `/opportunity/${id}/${cleanTitle}`);
-    setSelectedOppId(id);
-  };
-
-  const clearSelectedOpportunity = () => {
-    window.history.pushState(null, '', '/');
-    setSelectedOppId(null);
-  };
-
-  useEffect(() => {
-    const verifyFeedEndpoint = async () => {
-      console.log("=== STARTING /api/v1/opportunities INTEGRITY VERIFICATION ===");
-      try {
-        const response = await fetch("/api/v1/opportunities");
-        console.log(`[Verify Feed] Status: ${response.status} (${response.statusText})`);
-        console.log(`[Verify Feed] Headers:`, [...response.headers.entries()]);
-        
-        const text = await response.text();
-        console.log(`[Verify Feed] Raw Response Snippet:`, text.slice(0, 1000));
-        
-        try {
-          const parsed = JSON.parse(text);
-          console.log(`[Verify Feed] Parsed JSON Successfully! Total items:`, parsed.items?.length || 0);
-          console.log(`[Verify Feed] Response Body Object:`, parsed);
-        } catch (jsonErr) {
-          console.warn(`[Verify Feed] Response is not valid JSON string:`, jsonErr);
-        }
-      } catch (err) {
-        console.error(`[Verify Feed] Network/Operational Error during fetch execution:`, err);
-      }
-      console.log("=== END OF /api/v1/opportunities INTEGRITY VERIFICATION ===");
-    };
-
-    verifyFeedEndpoint();
-
-    const checkBackend = async () => {
-      const stats = await fetchSystemStats();
-      if (stats) {
-        setBackendReady(true);
-        setLastSyncedTime(new Date().toLocaleTimeString());
-      } else {
-        setBackendReady(false);
-      }
-    };
-    checkBackend();
-    const interval = setInterval(checkBackend, 60000); // Check every minute
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (backendReady) {
-      setOfflineBannerDismissed(false);
-    }
-  }, [backendReady]);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        try {
-          const docRef = doc(db, 'users', currentUser.uid);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            setProfile(docSnap.data() as UserProfile);
-          } else {
-            setProfile({
-              uid: currentUser.uid,
-              name: currentUser.displayName || '',
-              email: currentUser.email || ''
-            });
-          }
-        } catch (error) {
-          console.error("Error fetching user profile:", error);
-          setProfile({
-            uid: currentUser.uid,
-            name: currentUser.displayName || '',
-            email: currentUser.email || ''
-          });
-        }
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
+  }, [setActiveTab, setAppSearchQuery]);
 
   const TABS = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -202,25 +92,17 @@ function App() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard': return <Dashboard user={user} profile={profile} onViewDetails={viewOpportunity} />;
-      case 'opportunities': return (
-        <Opportunities 
-          user={user} 
-          profile={profile} 
-          onViewDetails={viewOpportunity} 
-          searchQuery={appSearchQuery}
-          setSearchQuery={setAppSearchQuery}
-        />
-      );
-      case 'bookmarks': return <Bookmarks user={user} profile={profile} onViewDetails={viewOpportunity} />;
-      case 'ai_assistant': return <AIAssistant user={user} profile={profile} />;
-      case 'submit': return <SubmitOpportunity user={user} />;
-      case 'mentorship': return <Mentorship user={user} />;
-      case 'community': return <Community user={user} profile={profile} />;
-      case 'profile': return <Profile user={user} profile={profile} setProfile={setProfile} />;
-      case 'settings': return <SettingsTab user={user} profile={profile} />;
+      case 'dashboard': return <Dashboard />;
+      case 'opportunities': return <Opportunities />;
+      case 'bookmarks': return <Bookmarks />;
+      case 'ai_assistant': return <AIAssistant />;
+      case 'submit': return <SubmitOpportunity />;
+      case 'mentorship': return <Mentorship />;
+      case 'community': return <Community />;
+      case 'profile': return <Profile />;
+      case 'settings': return <SettingsTab />;
       case 'admin': return <AdminDashboard />;
-      default: return <Dashboard user={user} profile={profile} onViewDetails={viewOpportunity} />;
+      default: return <Dashboard />;
     }
   };
 
@@ -246,10 +128,6 @@ function App() {
 
   if (!user) {
     return <SplashAuth />;
-  }
-
-  if (profile && profile.onboarded === false && user.email !== "uditt490@gmail.com") {
-      // Allow admin email to bypass or onboard
   }
 
   // Ensure they are onboarded or we show the onboarding flow
@@ -365,7 +243,6 @@ function App() {
               {activeTab === 'opportunities' ? (
                  <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                       {/* SVG Icon using Lucide is imported as Search? Wait, I don't want to break imports, I'll use simple search icon. */}
                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                     </div>
                     <input type="text" placeholder="Search standard competitions..." className="w-full bg-[#F8FAFC] border border-gray-200 outline-none rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={appSearchQuery} onChange={(e) => setAppSearchQuery(e.target.value)} />
@@ -387,15 +264,9 @@ function App() {
            </div>
         </div>
 
-        {/* Scrollable Content */}
         <div className="flex-1 p-4 lg:p-8 overflow-y-auto no-scrollbar pb-24" id="app-content">
           {selectedOppId ? (
-            <OpportunityDetail 
-              id={selectedOppId} 
-              onBack={clearSelectedOpportunity} 
-              profile={profile} 
-              setProfile={setProfile}
-            />
+            <OpportunityDetail />
           ) : (
             renderContent()
           )}

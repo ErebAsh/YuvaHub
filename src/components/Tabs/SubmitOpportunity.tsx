@@ -3,8 +3,10 @@ import { Check, Loader2 } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ErrorState } from '../ui/states';
+import { useAppContext } from '../../context/AppContext';
 
-export default function SubmitOpportunity({ user }: { user: any }) {
+export default function SubmitOpportunity() {
+  const { user } = useAppContext();
   const [formData, setFormData] = useState({
     type: 'Internship',
     title: '',

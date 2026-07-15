@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../../types';
 import { Bell, Lock, UserX, Database } from 'lucide-react';
+import { useAppContext } from '../../context/AppContext';
 
-export default function SettingsTab({ user, profile }: { user: any, profile: UserProfile | null }) {
+export default function SettingsTab() {
+  const { user } = useAppContext();
   const [notiMatches, setNotiMatches] = useState(true);
   const [notiDeadlines, setNotiDeadlines] = useState(true);
   const [notiMentor, setNotiMentor] = useState(true);

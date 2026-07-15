@@ -8,15 +8,11 @@ import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firest
 import { db } from '../../lib/firebase';
 import ShareCalendarActions from '../ui/ShareCalendarActions';
 import { ErrorState, LoadingState } from '../ui/states';
+import { useAppContext } from '../../context/AppContext';
 
-interface OpportunityDetailProps {
-  id: string;
-  onBack: () => void;
-  profile: any;
-  setProfile?: (p: any) => void;
-}
-
-export default function OpportunityDetail({ id, onBack, profile, setProfile }: OpportunityDetailProps) {
+export default function OpportunityDetail() {
+  const { selectedOppId, clearSelectedOpportunity: onBack, profile, setProfile } = useAppContext();
+  const id = selectedOppId || '';
   const [opp, setOpp] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
