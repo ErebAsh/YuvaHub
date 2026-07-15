@@ -4,6 +4,7 @@ import {
   browserLocalPersistence,
   browserPopupRedirectResolver,
   GoogleAuthProvider, 
+  GithubAuthProvider,
   OAuthProvider, 
   signInWithPopup,
   signInWithRedirect,
@@ -41,6 +42,7 @@ async function testConnection() {
 testConnection();
 
 export const googleProvider = new GoogleAuthProvider();
+export const githubProvider = new GithubAuthProvider();
 export const appleProvider = new OAuthProvider('apple.com');
 
 // Use signInWithPopup first, fall back to signInWithRedirect if domain is unauthorized
@@ -51,6 +53,17 @@ export const signInWithGoogle = async () => {
     if (error?.code === 'auth/unauthorized-domain' || error?.code === 'auth/popup-blocked') {
       console.log('Popup auth failed, falling back to redirect...');
       return signInWithRedirect(auth, googleProvider);
+    }
+    throw error;
+  }
+};
+export const signInWithGithub = async () => {
+  try {
+    return await signInWithPopup(auth, githubProvider);
+  } catch (error: any) {
+    if (error?.code === 'auth/unauthorized-domain' || error?.code === 'auth/popup-blocked') {
+      console.log('Popup auth failed, falling back to redirect...');
+      return signInWithRedirect(auth, githubProvider);
     }
     throw error;
   }

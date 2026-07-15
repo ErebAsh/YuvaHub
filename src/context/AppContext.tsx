@@ -93,24 +93,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUser(currentUser);
       if (currentUser) {
         try {
-          const docRef = doc(db, 'users', currentUser.uid);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            setProfile(docSnap.data() as UserProfile);
+          const token = await currentUser.getIdToken(true);
+          const response = await fetch("/api/v1/auth/sync", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.profile) {
+              setProfile(data.profile as UserProfile);
+            } else {
+              throw new Error("No profile returned from sync endpoint");
+            }
           } else {
+            throw new Error("Backend sync failed with status " + response.status);
+          }
+        } catch (error) {
+          console.warn("MongoDB auth sync failed, falling back to local Firestore sync:", error);
+          try {
+            const docRef = doc(db, 'users', currentUser.uid);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+              setProfile(docSnap.data() as UserProfile);
+            } else {
+              setProfile({
+                uid: currentUser.uid,
+                name: currentUser.displayName || '',
+                email: currentUser.email || '',
+                avatarUrl: currentUser.photoURL || ''
+              });
+            }
+          } catch (fsError) {
+            console.error("Firestore fallback sync failed:", fsError);
             setProfile({
               uid: currentUser.uid,
               name: currentUser.displayName || '',
-              email: currentUser.email || ''
+              email: currentUser.email || '',
+              avatarUrl: currentUser.photoURL || ''
             });
           }
-        } catch (error) {
-          console.error("Error fetching user profile:", error);
-          setProfile({
-            uid: currentUser.uid,
-            name: currentUser.displayName || '',
-            email: currentUser.email || ''
-          });
         }
       } else {
         setProfile(null);

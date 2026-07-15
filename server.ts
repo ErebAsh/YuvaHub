@@ -739,6 +739,138 @@ async function startServer() {
     }
   });
 
+  app.post("/api/v1/auth/sync", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "Unauthorized: Missing token" });
+      }
+
+      const idToken = authHeader.substring(7);
+
+      // 1. Fetch Firebase config to get API key
+      const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+      let firebaseApiKey = "";
+      if (fs.existsSync(firebaseConfigPath)) {
+        try {
+          const config = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
+          firebaseApiKey = config.apiKey || "";
+        } catch (e) {
+          console.error("[Auth] Error parsing firebase-applet-config.json:", e);
+        }
+      }
+
+      let uid = "";
+      let email = "";
+      let name = "";
+      let avatarUrl = "";
+
+      if (firebaseApiKey) {
+        // 2. Validate Firebase ID Token using Google Identity Toolkit API
+        const verifyUrl = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${firebaseApiKey}`;
+        const verifyRes = await fetch(verifyUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken })
+        });
+
+        if (!verifyRes.ok) {
+          const errData = await verifyRes.json().catch(() => ({}));
+          console.error("[Auth] Firebase token verification failed:", errData);
+          return res.status(401).json({ error: "Unauthorized: Invalid token" });
+        }
+
+        const data = await verifyRes.json();
+        if (!data.users || data.users.length === 0) {
+          return res.status(401).json({ error: "Unauthorized: User not found in token payload" });
+        }
+
+        const firebaseUser = data.users[0];
+        uid = firebaseUser.localId;
+        email = firebaseUser.email || "";
+        name = firebaseUser.displayName || "";
+        avatarUrl = firebaseUser.photoUrl || "";
+      } else {
+        // Mock verification for local offline development without a Firebase API key
+        try {
+          const parts = idToken.split(".");
+          if (parts.length === 3) {
+            const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
+            uid = payload.user_id || payload.sub;
+            email = payload.email || "";
+            name = payload.name || "";
+            avatarUrl = payload.picture || "";
+          }
+        } catch (e) {
+          return res.status(401).json({ error: "Unauthorized: Invalid mock token format" });
+        }
+
+        if (!uid) {
+          return res.status(401).json({ error: "Unauthorized: Mock validation failed" });
+        }
+      }
+
+      // 3. Sync profile with MongoDB
+      if (!db) {
+        return res.json({
+          status: "success",
+          profile: {
+            uid,
+            name,
+            email,
+            avatarUrl,
+            role: email === "uditt490@gmail.com" ? "admin" : "student"
+          }
+        });
+      }
+
+      const usersCollection = db.collection("users");
+      const existingUser = await usersCollection.findOne({ uid });
+
+      const role = email === "uditt490@gmail.com" ? "admin" : "student";
+
+      let updatedProfile;
+      if (existingUser) {
+        const updateData: any = {
+          name: existingUser.name || name,
+          email: existingUser.email || email,
+          avatarUrl: existingUser.avatarUrl || avatarUrl,
+          updatedAt: new Date()
+        };
+        await usersCollection.updateOne({ uid }, { $set: updateData });
+        updatedProfile = { ...existingUser, ...updateData };
+      } else {
+        const newUser = {
+          uid,
+          name,
+          email,
+          avatarUrl,
+          role,
+          onboarded: false,
+          bookmarks: [],
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        await usersCollection.insertOne(newUser);
+        updatedProfile = newUser;
+      }
+
+      if (updatedProfile._id) {
+        updatedProfile.id = updatedProfile._id.toString();
+        delete updatedProfile._id;
+      }
+
+      res.json({
+        status: "success",
+        profile: updatedProfile
+      });
+
+    } catch (err: any) {
+      console.error("[Auth] Error syncing user:", err);
+      res.status(500).json({ error: "Internal Server Error during auth sync" });
+    }
+  });
+
   app.post("/api/v1/interactions/track", async (req, res) => {
     try {
       if (db && req.body) {
