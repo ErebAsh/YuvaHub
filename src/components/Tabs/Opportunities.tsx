@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Users, ChevronRight, Clock, Star, Share2, Copy, RefreshCw } from 'lucide-react';
+import { Search, Filter, Users, ChevronRight, Clock, Star, Share2, Copy, RefreshCw, X } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { searchOpportunities, trackInteraction } from '../../services/apiClient';
 import { AsyncState } from '../ui/states';
@@ -22,25 +22,44 @@ export default function Opportunities() {
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Filter states
+  // Advanced Filter States
   const [filters, setFilters] = useState({
-    status: { 'Live': true, 'Upcoming': false, 'Closed': false, 'Closing Soon': false },
-    type: { 'Hackathons': true, 'Quizzes': true, 'Internships': false, 'Jobs': false, 'Scholarships': false, 'Mentorships': false },
-    eligibility: { 'College Students': true, 'Professionals': false, 'High School': false },
-    location: { 'Remote': false, 'On-site': false },
-    cost: { 'Free': false, 'Paid': false }
+    types: { 'Jobs': false, 'Internships': true, 'Hackathons': true, 'Scholarships': false, 'Fellowships': false },
+    locationTypes: { 'Remote': false, 'Onsite': false, 'Hybrid': false },
+    stipend: 'All', // 'All' | 'Paid' | 'Unpaid'
+    minSalary: 0,
+    deadlineType: 'All', // 'All' | 'Soon' | 'Active' | 'Custom'
+    startDate: '',
+    endDate: ''
   });
   
   const [sortBy, setSortBy] = useState('Most relevant');
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
   const fetchData = async (q: string, isRetry = false) => {
     isRetry ? setRetrying(true) : setLoading(true);
     setError(null);
     try {
-      const typeStr = filters.type.Internships ? 'Internship' : (filters.type.Hackathons ? 'Hackathon' : 'All');
-      const results = await searchOpportunities(q || "Student opportunities", typeStr, undefined, {});
+      const activeTypes = Object.keys(filters.types).filter(k => (filters.types as any)[k]);
+      const activeLocs = Object.keys(filters.locationTypes).filter(k => (filters.locationTypes as any)[k]);
+      
+      const filterPayload: any = {};
+      if (activeTypes.length > 0) filterPayload.types = activeTypes;
+      if (activeLocs.length > 0) filterPayload.locationTypes = activeLocs;
+      if (filters.stipend !== 'All') filterPayload.stipend = filters.stipend;
+      if (filters.minSalary > 0) filterPayload.minSalary = filters.minSalary;
+      if (filters.deadlineType !== 'All') {
+        filterPayload.deadlineType = filters.deadlineType;
+        if (filters.deadlineType === 'Custom') {
+          filterPayload.startDate = filters.startDate;
+          filterPayload.endDate = filters.endDate;
+        }
+      }
+
+      const results = await searchOpportunities(q || "", filterPayload, undefined);
       setSearchData(results);
-    } catch {
+    } catch (err) {
+      console.error("[Opportunities] Failed to load:", err);
       setError('Unable to load opportunities. Please try again.');
     } finally {
       setLoading(false);
@@ -58,68 +77,39 @@ export default function Opportunities() {
 
   const clearFilters = () => {
     setFilters({
-      status: { 'Live': false, 'Upcoming': false, 'Closed': false, 'Closing Soon': false },
-      type: { 'Hackathons': false, 'Quizzes': false, 'Internships': false, 'Jobs': false, 'Scholarships': false, 'Mentorships': false },
-      eligibility: { 'College Students': false, 'Professionals': false, 'High School': false },
-      location: { 'Remote': false, 'On-site': false },
-      cost: { 'Free': false, 'Paid': false }
+      types: { 'Jobs': false, 'Internships': false, 'Hackathons': false, 'Scholarships': false, 'Fellowships': false },
+      locationTypes: { 'Remote': false, 'Onsite': false, 'Hybrid': false },
+      stipend: 'All',
+      minSalary: 0,
+      deadlineType: 'All',
+      startDate: '',
+      endDate: ''
     });
     setSortBy('Most relevant');
   };
 
   const filteredResults = React.useMemo(() => {
     if (!searchData || !searchData.results) return [];
-    const query = qVal.trim().toLowerCase();
-    
     let results = searchData.results;
 
-    if (query) {
-      results = results.filter((opp: any) => {
-        const titleMatch = (opp.title || "").toLowerCase().includes(query);
-        const categoryMatch = (opp.category || "").toLowerCase().includes(query);
-        const descMatch = (opp.description || "").toLowerCase().includes(query);
-        return titleMatch || categoryMatch || descMatch;
-      });
-    }
-
-    // Apply Location Filter
-    if (filters.location['Remote'] || filters.location['On-site']) {
-      results = results.filter((opp: any) => {
-        const isRemote = (opp.location || '').toLowerCase().includes('remote');
-        if (filters.location['Remote'] && isRemote) return true;
-        if (filters.location['On-site'] && !isRemote) return true;
-        return false;
-      });
-    }
-
-    // Apply Cost Filter
-    if (filters.cost['Free'] || filters.cost['Paid']) {
-      results = results.filter((opp: any) => {
-        const isFree = !opp.price || (opp.price || '').toLowerCase() === 'free' || opp.price === 0;
-        if (filters.cost['Free'] && isFree) return true;
-        if (filters.cost['Paid'] && !isFree) return true;
-        return false;
-      });
-    }
-    
-    // Sort Results
+    // Client-side sorting
     results = [...results].sort((a: any, b: any) => {
       if (sortBy === 'Newest') {
-        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+        return new Date(b.createdAt || b.created_at || 0).getTime() - new Date(a.createdAt || a.created_at || 0).getTime();
       }
       if (sortBy === 'Recently updated') {
-        return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
+        return new Date(b.updatedAt || b.updated_at || 0).getTime() - new Date(a.updatedAt || a.updated_at || 0).getTime();
       }
       if (sortBy === 'Deadline') {
         if (!a.deadline) return 1;
         if (!b.deadline) return -1;
         return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
       }
-      return 0; // Most relevant (default DB sorting)
+      return 0; // Most relevant
     });
 
     return results;
-  }, [searchData, qVal, filters, sortBy]);
+  }, [searchData, sortBy]);
 
   const getThumbStyle = (type: string) => {
     const t = (type || '').toLowerCase();
@@ -138,6 +128,113 @@ export default function Opportunities() {
     return 'bg-orange-100 text-orange-700';
   };
 
+  const renderFilterControls = () => (
+    <div className="space-y-8">
+      {/* Type */}
+      <div>
+         <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] mb-4">Opportunity Type</h3>
+         <div className="space-y-2.5">
+            {Object.keys(filters.types).map(k => (
+               <label key={k} className="flex items-center gap-3 cursor-pointer group">
+                  <input type="checkbox" checked={(filters.types as any)[k]} onChange={(e) => setFilters(f => ({...f, types: {...f.types, [k]: e.target.checked}}))} className="w-4 h-4 rounded border-gray-300 text-[#2563EB] focus:ring-[#2563EB]" />
+                  <span className="text-[13px] text-[#0F172A] group-hover:text-[#2563EB] transition-colors">{k}</span>
+               </label>
+            ))}
+         </div>
+      </div>
+
+      {/* Location Type */}
+      <div>
+         <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] mb-4">Location Type</h3>
+         <div className="space-y-2.5">
+            {Object.keys(filters.locationTypes).map(k => (
+               <label key={k} className="flex items-center gap-3 cursor-pointer group">
+                  <input type="checkbox" checked={(filters.locationTypes as any)[k]} onChange={(e) => setFilters(f => ({...f, locationTypes: {...f.locationTypes, [k]: e.target.checked}}))} className="w-4 h-4 rounded border-gray-300 text-[#2563EB] focus:ring-[#2563EB]" />
+                  <span className="text-[13px] text-[#0F172A] group-hover:text-[#2563EB] transition-colors">{k}</span>
+               </label>
+            ))}
+         </div>
+      </div>
+
+      {/* Stipend / Salary */}
+      <div>
+         <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] mb-4">Stipend / Salary</h3>
+         <div className="space-y-3">
+            <div className="flex gap-2">
+              {['All', 'Paid', 'Unpaid'].map(opt => (
+                <button
+                  key={opt}
+                  onClick={() => setFilters(f => ({ ...f, stipend: opt }))}
+                  className={`flex-1 py-1.5 text-[12px] font-semibold border rounded-lg transition-colors ${filters.stipend === opt ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+            {filters.stipend === 'Paid' && (
+              <div className="pt-2 animate-fade-in">
+                <div className="flex justify-between items-center text-[11px] text-gray-500 mb-2">
+                  <span>Min Stipend</span>
+                  <span className="font-bold text-[#0F172A]">₹{filters.minSalary.toLocaleString()}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="50000"
+                  step="2000"
+                  value={filters.minSalary}
+                  onChange={(e) => setFilters(f => ({ ...f, minSalary: parseInt(e.target.value, 10) }))}
+                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                />
+              </div>
+            )}
+         </div>
+      </div>
+
+      {/* Deadline */}
+      <div>
+         <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] mb-4">Deadline</h3>
+         <div className="space-y-3">
+            {[
+              { label: 'Anytime', val: 'All' },
+              { label: 'Expiring soon (< 48h)', val: 'Soon' },
+              { label: 'Active / Open', val: 'Active' },
+              { label: 'Custom Date Range', val: 'Custom' }
+            ].map(opt => (
+              <label key={opt.val} className="flex items-center gap-3 cursor-pointer group">
+                <input
+                  type="radio"
+                  name="deadlineType"
+                  checked={filters.deadlineType === opt.val}
+                  onChange={() => setFilters(f => ({ ...f, deadlineType: opt.val }))}
+                  className="w-4 h-4 border-gray-300 text-[#2563EB] focus:ring-[#2563EB]"
+                />
+                <span className="text-[13px] text-[#0F172A] group-hover:text-[#2563EB] transition-colors">{opt.label}</span>
+              </label>
+            ))}
+            {filters.deadlineType === 'Custom' && (
+              <div className="space-y-2 pt-2 animate-fade-in">
+                <input
+                  type="date"
+                  value={filters.startDate}
+                  onChange={(e) => setFilters(f => ({ ...f, startDate: e.target.value }))}
+                  className="w-full text-[12px] p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500 text-gray-700 bg-white"
+                  placeholder="Start date"
+                />
+                <input
+                  type="date"
+                  value={filters.endDate}
+                  onChange={(e) => setFilters(f => ({ ...f, endDate: e.target.value }))}
+                  className="w-full text-[12px] p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500 text-gray-700 bg-white"
+                  placeholder="End date"
+                />
+              </div>
+            )}
+         </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="max-w-[1200px] mx-auto flex items-start gap-8 font-sans pb-12">
       
@@ -148,75 +245,10 @@ export default function Opportunities() {
             <h2 className="text-[15px] font-[700] text-gray-900">Filters</h2>
          </div>
 
-         {/* Filter Groups */}
-         <div className="space-y-8">
-            {/* Status */}
-            <div>
-               <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] mb-4">Status</h3>
-               <div className="space-y-2.5">
-                  {Object.keys(filters.status).map(k => (
-                     <label key={k} className="flex items-center gap-3 cursor-pointer group">
-                        <input type="checkbox" checked={(filters.status as any)[k]} onChange={(e) => setFilters(f => ({...f, status: {...f.status, [k]: e.target.checked}}))} className="w-4 h-4 rounded border-gray-300 text-[#2563EB] focus:ring-[#2563EB]" />
-                        <span className="text-[13px] text-[#0F172A] group-hover:text-[#2563EB] transition-colors">{k}</span>
-                     </label>
-                  ))}
-               </div>
-            </div>
+         {/* Filter Controls */}
+         {renderFilterControls()}
 
-            {/* Type */}
-            <div>
-               <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] mb-4">Opportunity Type</h3>
-               <div className="space-y-2.5">
-                  {Object.keys(filters.type).map(k => (
-                     <label key={k} className="flex items-center gap-3 cursor-pointer group">
-                        <input type="checkbox" checked={(filters.type as any)[k]} onChange={(e) => setFilters(f => ({...f, type: {...f.type, [k]: e.target.checked}}))} className="w-4 h-4 rounded border-gray-300 text-[#2563EB] focus:ring-[#2563EB]" />
-                        <span className="text-[13px] text-[#0F172A] group-hover:text-[#2563EB] transition-colors">{k}</span>
-                     </label>
-                  ))}
-               </div>
-            </div>
-
-            {/* Eligibility */}
-            <div>
-               <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] mb-4">Eligibility</h3>
-               <div className="space-y-2.5">
-                  {Object.keys(filters.eligibility).map(k => (
-                     <label key={k} className="flex items-center gap-3 cursor-pointer group">
-                        <input type="checkbox" checked={(filters.eligibility as any)[k]} onChange={(e) => setFilters(f => ({...f, eligibility: {...f.eligibility, [k]: e.target.checked}}))} className="w-4 h-4 rounded border-gray-300 text-[#2563EB] focus:ring-[#2563EB]" />
-                        <span className="text-[13px] text-[#0F172A] group-hover:text-[#2563EB] transition-colors">{k}</span>
-                     </label>
-                  ))}
-               </div>
-            </div>
-
-            {/* Location */}
-            <div>
-               <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] mb-4">Location</h3>
-               <div className="space-y-2.5">
-                  {Object.keys(filters.location).map(k => (
-                     <label key={k} className="flex items-center gap-3 cursor-pointer group">
-                        <input type="checkbox" checked={(filters.location as any)[k]} onChange={(e) => setFilters(f => ({...f, location: {...f.location, [k]: e.target.checked}}))} className="w-4 h-4 rounded border-gray-300 text-[#2563EB] focus:ring-[#2563EB]" />
-                        <span className="text-[13px] text-[#0F172A] group-hover:text-[#2563EB] transition-colors">{k}</span>
-                     </label>
-                  ))}
-               </div>
-            </div>
-
-            {/* Cost */}
-            <div>
-               <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] mb-4">Cost</h3>
-               <div className="space-y-2.5">
-                  {Object.keys(filters.cost).map(k => (
-                     <label key={k} className="flex items-center gap-3 cursor-pointer group">
-                        <input type="checkbox" checked={(filters.cost as any)[k]} onChange={(e) => setFilters(f => ({...f, cost: {...f.cost, [k]: e.target.checked}}))} className="w-4 h-4 rounded border-gray-300 text-[#2563EB] focus:ring-[#2563EB]" />
-                        <span className="text-[13px] text-[#0F172A] group-hover:text-[#2563EB] transition-colors">{k}</span>
-                     </label>
-                  ))}
-               </div>
-            </div>
-         </div>
-
-         <button onClick={clearFilters} className="mt-10 w-full py-2.5 border-[1.5px] border-[#E2E8F0] text-[#2563EB] text-[13px] font-bold rounded-[8px] hover:bg-[#EFF6FF] transition-colors">
+         <button onClick={clearFilters} className="mt-10 w-full py-2.5 border-[1.5px] border-[#E2E8F0] text-[#2563EB] text-[13px] font-bold rounded-[8px] hover:bg-[#EFF6FF] transition-colors cursor-pointer">
             Clear Filters
          </button>
       </aside>
@@ -238,7 +270,14 @@ export default function Opportunities() {
              Refresh
            </button>
            
-           <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <button 
+                onClick={() => setIsMobileFilterOpen(true)}
+                className="md:hidden flex items-center justify-center gap-2 bg-white border border-[#E2E8F0] px-4 py-2 rounded-[8px] text-[13px] font-[600] text-[#0F172A] hover:bg-[#F8FAFC] transition-colors shadow-sm flex-1"
+              >
+                <Filter className="w-4 h-4 text-gray-500" />
+                <span>Filters</span>
+              </button>
              {/* Sort Select */}
              <select 
                value={sortBy}
@@ -349,6 +388,44 @@ export default function Opportunities() {
          )}
       </main>
 
+      {/* Mobile slide-out filter drawer */}
+      {isMobileFilterOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end md:hidden bg-gray-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-xs h-full bg-white shadow-2xl flex flex-col relative p-6 overflow-y-auto animate-slide-in-right">
+            <div className="flex items-center justify-between border-b pb-4 mb-6">
+              <div className="flex items-center gap-2">
+                <Filter className="w-5 h-5 text-gray-700" />
+                <h2 className="text-[16px] font-[700] text-gray-900">Filters</h2>
+              </div>
+              <button 
+                onClick={() => setIsMobileFilterOpen(false)}
+                className="p-1 rounded-full hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+              {renderFilterControls()}
+            </div>
+
+            <div className="border-t pt-4 mt-6 flex gap-3">
+              <button 
+                onClick={() => { clearFilters(); setIsMobileFilterOpen(false); }}
+                className="flex-1 py-3 border border-gray-200 rounded-xl text-[13px] font-bold text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                Clear All
+              </button>
+              <button 
+                onClick={() => setIsMobileFilterOpen(false)}
+                className="flex-1 py-3 bg-blue-600 rounded-xl text-[13px] font-bold text-white hover:bg-blue-700 transition-colors cursor-pointer shadow-md shadow-blue-500/10"
+              >
+                Show Results
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

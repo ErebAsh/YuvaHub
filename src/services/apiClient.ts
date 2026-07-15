@@ -347,16 +347,47 @@ export async function fetchExploreFeed(cursor?: string, limit: number = 20) {
   }
 }
 
-export async function searchOpportunities(query: string, type?: string, cursor?: string, advanced?: {remote?: boolean, location?: string, days?: number, company?: string}) {
-  const cacheKey = `search_${query.toLowerCase().replace(/\s+/g, '_')}`;
+export async function searchOpportunities(
+  query: string, 
+  filters?: {
+    types?: string[];
+    locationTypes?: string[];
+    stipend?: string;
+    minSalary?: number;
+    deadlineType?: string;
+    startDate?: string;
+    endDate?: string;
+  }, 
+  cursor?: string
+) {
+  const cacheKey = `search_${query.toLowerCase().replace(/\s+/g, '_')}_${JSON.stringify(filters || {})}`;
   try {
     const searchParams = new URLSearchParams();
     searchParams.append('q', query);
-    if (type && type !== 'All') searchParams.append('type', type);
-    if (advanced?.remote) searchParams.append('remote', 'true');
-    if (advanced?.location) searchParams.append('location', advanced.location);
-    if (advanced?.days) searchParams.append('days', advanced.days.toString());
-    if (advanced?.company) searchParams.append('q', advanced.company + ' ' + query); // hacky company filter
+
+    if (filters) {
+      if (filters.types && filters.types.length > 0) {
+        searchParams.append('types', filters.types.join(','));
+      }
+      if (filters.locationTypes && filters.locationTypes.length > 0) {
+        searchParams.append('locationTypes', filters.locationTypes.join(','));
+      }
+      if (filters.stipend) {
+        searchParams.append('stipend', filters.stipend);
+      }
+      if (filters.minSalary) {
+        searchParams.append('minSalary', filters.minSalary.toString());
+      }
+      if (filters.deadlineType) {
+        searchParams.append('deadlineType', filters.deadlineType);
+      }
+      if (filters.startDate) {
+        searchParams.append('startDate', filters.startDate);
+      }
+      if (filters.endDate) {
+        searchParams.append('endDate', filters.endDate);
+      }
+    }
     
     if (cursor) searchParams.append('cursor', cursor);
     
@@ -371,6 +402,8 @@ export async function searchOpportunities(query: string, type?: string, cursor?:
 
     const data = await response.json();
     
+    const type = (filters?.types && filters.types.length > 0) ? filters.types[0] : undefined;
+
     if (!data.results || data.results.length === 0) {
         console.log("DB search empty, using Gemini Scout Protocol...");
         let geminiSuccess = false;
@@ -390,7 +423,7 @@ export async function searchOpportunities(query: string, type?: string, cursor?:
            const localMatches = getFilteredFallbacks({ field: type }, 6, query);
            data.results = localMatches.map((item: any) => ({ ...item, isFallback: true }));
            data.isFallback = true;
-        }
+         }
     }
     
     if (data.results && data.results.length > 0) saveToCache(cacheKey, data);
@@ -399,6 +432,8 @@ export async function searchOpportunities(query: string, type?: string, cursor?:
     const cached = getFromCache(cacheKey);
     if (cached) return { ...cached, isFallback: true };
     
+    const type = (filters?.types && filters.types.length > 0) ? filters.types[0] : undefined;
+
     try {
         const geminiRes = await geminiService.runScoutProtocol({ tech: query, goal: type }, {});
         if (geminiRes && geminiRes.results && geminiRes.results.length > 0) {
