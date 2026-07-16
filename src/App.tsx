@@ -3,7 +3,7 @@ import { LayoutDashboard, Globe, PlusCircle, Users, User, Menu, X, Activity, Boo
 import { signInWithGoogle, logout } from './lib/firebase';
 import { UserProfile } from './types';
 import { useAppContext } from './context/AppContext';
-
+import { scrollContentToTop } from './lib/smoothScroll';
 // Tab/View Components
 import Dashboard from './components/Tabs/Dashboard';
 import Opportunities from './components/Tabs/Opportunities';
@@ -182,6 +182,7 @@ function App() {
                 onClick={() => {
                   setActiveTab(tab.id);
                   clearSelectedOpportunity();
+                  scrollContentToTop();
                 }}
                 className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all rounded-lg ${isActive ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400 border-l-4 border-blue-600' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white border-l-4 border-transparent'}`}
                 style={{ borderLeftWidth: isActive ? '4px' : '0px', paddingLeft: isActive ? '12px' : '16px' }}
@@ -247,6 +248,7 @@ function App() {
                     setActiveTab(tab.id);
                     clearSelectedOpportunity();
                     setIsMobileMenuOpen(false);
+                    scrollContentToTop();
                   }}
                   className={`w-full flex items-center gap-3 px-4 py-4 text-sm font-medium transition-all rounded-lg ${isActive ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400 border-l-4 border-blue-600' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border-l-4 border-transparent'}`}
                 >

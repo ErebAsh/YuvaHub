@@ -31,6 +31,41 @@
   }
 }
 
+#custom-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 24px;
+  height: 24px;
+  margin-left: -12px;
+  margin-top: -12px;
+  border-radius: 50%;
+  background: var(--color-primary, #2563eb);
+  box-shadow: 0 0 12px 4px var(--color-primary, #2563eb);
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 9999;
+  will-change: transform;
+}
+
+/* Hide it on touch devices so it doesn't get stuck on screen */
+@media (pointer: coarse) {
+  #custom-cursor {
+    display: none;
+  }
+}
+
+/* Hide the real system cursor only on devices with a mouse */
+@media (pointer: fine) {
+  body {
+    cursor: none;
+  }
+}
+
+#app-content {
+  scroll-behavior: smooth;
+}
+
 @layer base {
   body {
     @apply bg-white text-[var(--color-text-main)] font-sans antialiased transition-colors duration-300 dark:bg-gray-900 dark:text-gray-100;
