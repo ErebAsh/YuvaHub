@@ -11,12 +11,120 @@ export default function Profile() {
   const [formData, setFormData] = useState<UserProfile>(profile || {
     uid: user?.uid || '', name: user?.displayName || '', email: user?.email || '',
     college: '', year: '', field: '', city: '', state: '', country: '', phone: '',
-    githubUrl: '', linkedinUrl: '', portfolioUrl: '', bio: '', avatarUrl: '', skills: []
+    githubUrl: '', linkedinUrl: '', portfolioUrl: '', bio: '', avatarUrl: '', skills: [],
+    avatarPublicId: '', resumeUrl: '', resumePublicId: '', coverLetterUrl: '', coverLetterPublicId: ''
   });
   
   const [skillInput, setSkillInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [uploadingType, setUploadingType] = useState<string | null>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'resume' | 'cover_letter') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Enforce client-side validation to ensure only .pdf, .png, and .jpeg are accepted.
+    const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    const allowed = ['.pdf', '.png', '.jpeg', '.jpg'];
+    if (!allowed.includes(fileExt)) {
+      alert("Unsupported file type. Only .pdf, .png, and .jpeg are allowed.");
+      return;
+    }
+
+    if (type === 'avatar' && fileExt === '.pdf') {
+      alert("Avatars must be an image (.png or .jpeg).");
+      return;
+    }
+
+    // Limit file size to 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      alert("File size exceeds the 10MB limit.");
+      return;
+    }
+
+    if (!user) {
+      alert("Authentication required.");
+      return;
+    }
+
+    setUploadingType(type);
+    try {
+      const token = await user.getIdToken();
+      
+      // Step 1: Get signature from backend
+      const sigRes = await fetch('/api/storage/signature', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ fileType: type, extension: fileExt })
+      });
+
+      if (!sigRes.ok) {
+        const errorData = await sigRes.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to generate upload signature");
+      }
+
+      const sigData = await sigRes.json();
+
+      // Step 2: Upload directly to Cloudinary
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
+      uploadFormData.append('api_key', sigData.apiKey);
+      uploadFormData.append('timestamp', sigData.timestamp.toString());
+      uploadFormData.append('signature', sigData.signature);
+      uploadFormData.append('folder', sigData.folder);
+      if (sigData.allowed_formats) {
+        uploadFormData.append('allowed_formats', sigData.allowed_formats);
+      }
+
+      const uploadUrl = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/auto/upload`;
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'POST',
+        body: uploadFormData
+      });
+
+      if (!uploadRes.ok) {
+        const uploadError = await uploadRes.json().catch(() => ({}));
+        throw new Error(uploadError.error?.message || "Cloudinary upload failed");
+      }
+
+      const uploadData = await uploadRes.json();
+
+      // Step 3: Save metadata to MongoDB
+      const saveRes = await fetch('/api/storage/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          type,
+          url: uploadData.secure_url,
+          publicId: uploadData.public_id
+        })
+      });
+
+      if (!saveRes.ok) {
+        const saveError = await saveRes.json().catch(() => ({}));
+        throw new Error(saveError.error || "Failed to save upload metadata to profile");
+      }
+
+      const saveData = await saveRes.json();
+      if (saveData.profile) {
+        setProfile(saveData.profile);
+        setFormData(saveData.profile);
+        alert(`${type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')} uploaded successfully!`);
+      }
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      alert(`Upload failed: ${err.message}`);
+    } finally {
+      setUploadingType(null);
+    }
+  };
 
   useEffect(() => {
     if (profile) setFormData(profile);
@@ -41,6 +149,22 @@ export default function Profile() {
     setSaveError(null);
     try {
       await setDoc(doc(db, 'users', user.uid), formData, { merge: true });
+
+      // Synchronize changes to MongoDB backend
+      try {
+        const token = await user.getIdToken(true);
+        await fetch("/api/v1/auth/sync", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify(formData)
+        });
+      } catch (dbErr) {
+        console.warn("MongoDB sync failed on profile save:", dbErr);
+      }
+
       setProfile(formData);
       alert("Profile updated successfully.");
     } catch {
@@ -67,14 +191,34 @@ export default function Profile() {
     <div className="max-w-5xl mx-auto space-y-8">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 bg-white p-8 rounded-xl shadow-sm border border-gray-100">
         <div className="flex items-center gap-6">
-          <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-3xl font-bold">
-            {formData.name?.charAt(0) || user?.displayName?.charAt(0) || 'U'}
-          </div>
+          {formData.avatarUrl ? (
+            <img 
+              src={formData.avatarUrl.includes("cloudinary.com") ? formData.avatarUrl.replace("/upload/", "/upload/f_auto,q_auto,c_fill,w_200,h_200/") : formData.avatarUrl} 
+              alt="Avatar" 
+              className="w-20 h-20 rounded-full object-cover border-2 border-blue-500 shadow-sm"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-3xl font-bold">
+              {formData.name?.charAt(0) || user?.displayName?.charAt(0) || 'U'}
+            </div>
+          )}
           <div>
             <h2 className="text-3xl font-bold text-gray-900 mb-1">
               {formData.name || 'Your Profile'}
             </h2>
             <p className="text-gray-500 font-medium">Manage your identity and parameters.</p>
+            <div className="mt-2 flex items-center gap-3">
+              <label className="cursor-pointer text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors font-medium">
+                Upload Avatar
+                <input 
+                  type="file" 
+                  accept="image/png, image/jpeg" 
+                  className="hidden" 
+                  onChange={(e) => handleFileUpload(e, 'avatar')} 
+                />
+              </label>
+              {uploadingType === 'avatar' && <span className="text-xs text-gray-500 animate-pulse">Uploading...</span>}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-4 bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -148,6 +292,60 @@ export default function Profile() {
                 <input type="url" placeholder="GitHub URL" className="clean-input p-3" value={formData.githubUrl} onChange={e => setFormData({...formData, githubUrl: e.target.value})} />
                 <input type="url" placeholder="LinkedIn URL" className="clean-input p-3" value={formData.linkedinUrl} onChange={e => setFormData({...formData, linkedinUrl: e.target.value})} />
                 <input type="url" placeholder="Portfolio URL" className="clean-input p-3 md:col-span-2" value={formData.portfolioUrl} onChange={e => setFormData({...formData, portfolioUrl: e.target.value})} />
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 block">Resume (PDF, PNG, JPEG)</label>
+                  <div className="flex items-center gap-3">
+                    <label className="cursor-pointer text-sm font-semibold bg-gray-50 hover:bg-gray-100 text-gray-700 px-4 py-3 rounded-lg border border-gray-300 transition-colors flex-1 text-center">
+                      {formData.resumeUrl ? "Change Resume" : "Upload Resume"}
+                      <input 
+                        type="file" 
+                        accept=".pdf, image/png, image/jpeg" 
+                        className="hidden" 
+                        onChange={(e) => handleFileUpload(e, 'resume')} 
+                      />
+                    </label>
+                    {uploadingType === 'resume' && <span className="text-xs text-gray-500 animate-pulse">Uploading...</span>}
+                  </div>
+                  {formData.resumeUrl && (
+                    <a 
+                      href={formData.resumeUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-1"
+                    >
+                      View Uploaded Resume <ExternalLink className="w-3.5 h-3.5 inline-block ml-0.5" />
+                    </a>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 block">Cover Letter (PDF, PNG, JPEG)</label>
+                  <div className="flex items-center gap-3">
+                    <label className="cursor-pointer text-sm font-semibold bg-gray-50 hover:bg-gray-100 text-gray-700 px-4 py-3 rounded-lg border border-gray-300 transition-colors flex-1 text-center">
+                      {formData.coverLetterUrl ? "Change Cover Letter" : "Upload Cover Letter"}
+                      <input 
+                        type="file" 
+                        accept=".pdf, image/png, image/jpeg" 
+                        className="hidden" 
+                        onChange={(e) => handleFileUpload(e, 'cover_letter')} 
+                      />
+                    </label>
+                    {uploadingType === 'cover_letter' && <span className="text-xs text-gray-500 animate-pulse">Uploading...</span>}
+                  </div>
+                  {formData.coverLetterUrl && (
+                    <a 
+                      href={formData.coverLetterUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-1"
+                    >
+                      View Uploaded Cover Letter <ExternalLink className="w-3.5 h-3.5 inline-block ml-0.5" />
+                    </a>
+                  )}
+                </div>
               </div>
               
               <div>

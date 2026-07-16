@@ -56,7 +56,24 @@ export default function OnboardingFlow({ user, profile, onComplete }: Onboarding
           onboarded: true
         };
 
+        // Write to Firestore
         await setDoc(doc(db, 'users', user.uid), updatedProfile, { merge: true });
+
+        // Write to MongoDB
+        try {
+          const token = await user.getIdToken(true);
+          await fetch("/api/v1/auth/sync", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify(updatedProfile)
+          });
+        } catch (dbErr) {
+          console.warn("MongoDB sync failed on onboarding completion:", dbErr);
+        }
+
         onComplete(updatedProfile);
       } catch (error) {
         console.error("Error saving profile", error);

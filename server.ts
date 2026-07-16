@@ -14,8 +14,16 @@ import { isToxic, createToxicityMiddleware } from "./src/services/toxicity.js";
 import rateLimit from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 import Redis from "ioredis";
+import { v2 as cloudinary } from "cloudinary";
 
 dotenv.config();
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true
+});
 
 let redisClient: Redis;
 try {
@@ -959,21 +967,38 @@ async function startServer() {
       let updatedProfile;
       if (existingUser) {
         const updateData: any = {
-          name: existingUser.name || name,
-          email: existingUser.email || email,
-          avatarUrl: existingUser.avatarUrl || avatarUrl,
+          name: req.body.name || existingUser.name || name,
+          email: req.body.email || existingUser.email || email,
+          avatarUrl: req.body.avatarUrl || existingUser.avatarUrl || avatarUrl,
+          onboarded: req.body.onboarded !== undefined ? req.body.onboarded : existingUser.onboarded,
+          college: req.body.college || existingUser.college,
+          year: req.body.year || existingUser.year,
+          field: req.body.field || existingUser.field,
+          skills: req.body.skills || existingUser.skills,
+          avatarPublicId: req.body.avatarPublicId || existingUser.avatarPublicId,
+          resumeUrl: req.body.resumeUrl || existingUser.resumeUrl,
+          resumePublicId: req.body.resumePublicId || existingUser.resumePublicId,
+          coverLetterUrl: req.body.coverLetterUrl || existingUser.coverLetterUrl,
+          coverLetterPublicId: req.body.coverLetterPublicId || existingUser.coverLetterPublicId,
           updatedAt: new Date()
         };
+        // Remove undefined keys
+        Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+
         await usersCollection.updateOne({ uid }, { $set: updateData });
         updatedProfile = { ...existingUser, ...updateData };
       } else {
-        const newUser = {
+        const newUser: any = {
           uid,
-          name,
-          email,
-          avatarUrl,
+          name: req.body.name || name,
+          email: req.body.email || email,
+          avatarUrl: req.body.avatarUrl || avatarUrl,
           role,
-          onboarded: false,
+          onboarded: req.body.onboarded !== undefined ? req.body.onboarded : false,
+          college: req.body.college || "",
+          year: req.body.year || "",
+          field: req.body.field || "",
+          skills: req.body.skills || [],
           bookmarks: [],
           createdAt: new Date(),
           updatedAt: new Date()
@@ -997,6 +1022,208 @@ async function startServer() {
       res.status(500).json({ error: "Internal Server Error during auth sync" });
     }
   });
+
+  async function getAuthenticatedUser(req: any) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      throw new Error("Unauthorized: Missing token");
+    }
+
+    const idToken = authHeader.substring(7);
+
+    // Fetch Firebase config to get API key
+    const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+    let firebaseApiKey = "";
+    if (fs.existsSync(firebaseConfigPath)) {
+      try {
+        const config = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
+        firebaseApiKey = config.apiKey || "";
+      } catch (e) {
+        console.error("[Auth] Error parsing firebase-applet-config.json:", e);
+      }
+    }
+
+    let uid = "";
+    let email = "";
+
+    if (firebaseApiKey) {
+      const verifyUrl = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${firebaseApiKey}`;
+      const verifyRes = await fetch(verifyUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken })
+      });
+
+      if (!verifyRes.ok) {
+        throw new Error("Unauthorized: Invalid token");
+      }
+
+      const data = await verifyRes.json();
+      if (!data.users || data.users.length === 0) {
+        throw new Error("Unauthorized: User not found");
+      }
+      uid = data.users[0].localId;
+      email = data.users[0].email || "";
+    } else {
+      try {
+        const parts = idToken.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
+          uid = payload.user_id || payload.sub;
+          email = payload.email || "";
+        }
+      } catch (e) {
+        throw new Error("Unauthorized: Invalid mock token format");
+      }
+
+      if (!uid) {
+        throw new Error("Unauthorized: Mock validation failed");
+      }
+    }
+
+    return { uid, email };
+  }
+
+  const handleSignatureRequest = async (req: any, res: any) => {
+    try {
+      const user = await getAuthenticatedUser(req);
+      const { fileType, extension } = req.body;
+
+      if (!fileType || !extension) {
+        return res.status(400).json({ error: "Missing fileType or extension" });
+      }
+
+      // Enforce client-side and server-side validation to ensure only .pdf, .png, and .jpeg are accepted.
+      const normalizedExt = extension.toLowerCase().replace(/^\./, "");
+      const allowedExtensions = ["pdf", "png", "jpeg", "jpg"];
+      if (!allowedExtensions.includes(normalizedExt)) {
+        return res.status(400).json({ error: "Unsupported file type. Only .pdf, .png, and .jpeg are allowed." });
+      }
+
+      // Configure folder based on file type
+      // For resumes: yuvahub/resumes/${user_id}
+      // For cover letters: yuvahub/cover_letters/${user_id}
+      // For avatars: yuvahub/avatars
+      let folder = "";
+      if (fileType === "resume") {
+        folder = `yuvahub/resumes/${user.uid}`;
+      } else if (fileType === "cover_letter") {
+        folder = `yuvahub/cover_letters/${user.uid}`;
+      } else if (fileType === "avatar") {
+        folder = `yuvahub/avatars/${user.uid}`;
+      } else {
+        return res.status(400).json({ error: "Invalid fileType" });
+      }
+
+      const timestamp = Math.round(new Date().getTime() / 1000);
+
+      // Construct signed parameters
+      const paramsToSign: Record<string, any> = {
+        timestamp,
+        folder,
+      };
+
+      // Restrict formats based on fileType
+      if (fileType === "resume" || fileType === "cover_letter") {
+        paramsToSign.allowed_formats = "pdf";
+      } else if (fileType === "avatar") {
+        paramsToSign.allowed_formats = "png,jpg,jpeg";
+      }
+
+      // Validate parameter formats for security
+      if (fileType === "resume" || fileType === "cover_letter") {
+        if (normalizedExt !== "pdf") {
+          return res.status(400).json({ error: "Resumes and cover letters must be PDF format." });
+        }
+      } else if (fileType === "avatar") {
+        if (!["png", "jpg", "jpeg"].includes(normalizedExt)) {
+          return res.status(400).json({ error: "Avatars must be PNG or JPEG format." });
+        }
+      }
+
+      const apiSecret = process.env.CLOUDINARY_API_SECRET || "";
+      if (!apiSecret) {
+        return res.status(500).json({ error: "Cloudinary API Secret not configured." });
+      }
+
+      const signature = cloudinary.utils.api_sign_request(paramsToSign, apiSecret);
+
+      res.json({
+        signature,
+        timestamp,
+        folder,
+        allowed_formats: paramsToSign.allowed_formats,
+        apiKey: process.env.CLOUDINARY_API_KEY,
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+      });
+
+    } catch (err: any) {
+      console.error("[Storage] Error generating signature:", err);
+      res.status(err.message?.startsWith("Unauthorized") ? 401 : 500).json({ error: err.message || "Internal Server Error" });
+    }
+  };
+
+  const handleSaveUpload = async (req: any, res: any) => {
+    try {
+      const user = await getAuthenticatedUser(req);
+      const { type, url, publicId } = req.body;
+
+      if (!type || !url || !publicId) {
+        return res.status(400).json({ error: "Missing type, url, or publicId" });
+      }
+
+      if (!["avatar", "resume", "cover_letter"].includes(type)) {
+        return res.status(400).json({ error: "Invalid document type" });
+      }
+
+      if (!db) {
+        return res.status(503).json({ error: "Database not available" });
+      }
+
+      const usersCollection = db.collection("users");
+
+      const updateFields: Record<string, any> = {
+        updatedAt: new Date()
+      };
+
+      if (type === "avatar") {
+        updateFields.avatarUrl = url;
+        updateFields.avatarPublicId = publicId;
+      } else if (type === "resume") {
+        updateFields.resumeUrl = url;
+        updateFields.resumePublicId = publicId;
+      } else if (type === "cover_letter") {
+        updateFields.coverLetterUrl = url;
+        updateFields.coverLetterPublicId = publicId;
+      }
+
+      await usersCollection.updateOne({ uid: user.uid }, { $set: updateFields });
+      const updatedProfile = await usersCollection.findOne({ uid: user.uid });
+
+      if (!updatedProfile) {
+        return res.status(404).json({ error: "User profile not found in database" });
+      }
+
+      if (updatedProfile._id) {
+        updatedProfile.id = updatedProfile._id.toString();
+        delete updatedProfile._id;
+      }
+
+      res.json({
+        status: "success",
+        profile: updatedProfile
+      });
+
+    } catch (err: any) {
+      console.error("[Storage] Error saving upload metadata:", err);
+      res.status(err.message?.startsWith("Unauthorized") ? 401 : 500).json({ error: err.message || "Internal Server Error" });
+    }
+  };
+
+  app.post("/api/storage/signature", handleSignatureRequest);
+  app.post("/api/v1/storage/signature", handleSignatureRequest);
+  app.post("/api/storage/save", handleSaveUpload);
+  app.post("/api/v1/storage/save", handleSaveUpload);
 
   app.post("/api/v1/interactions/track", async (req, res) => {
     try {

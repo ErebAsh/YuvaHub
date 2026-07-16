@@ -32,6 +32,11 @@ export interface UserProfile {
   portfolioUrl?: string;
   bio?: string;
   avatarUrl?: string;
+  avatarPublicId?: string;
+  resumeUrl?: string;
+  resumePublicId?: string;
+  coverLetterUrl?: string;
+  coverLetterPublicId?: string;
   onboarded?: boolean;
   bookmarks?: string[];
 }
