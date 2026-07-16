@@ -4,7 +4,7 @@ import { Bell, Lock, UserX, Database } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 
 export default function SettingsTab() {
-  const { user } = useAppContext();
+  const { user, setActiveTab } = useAppContext();
   const [notiMatches, setNotiMatches] = useState(true);
   const [notiDeadlines, setNotiDeadlines] = useState(true);
   const [notiMentor, setNotiMentor] = useState(true);
@@ -45,6 +45,16 @@ export default function SettingsTab() {
           <div className="space-y-4">
             <ToggleOption label="Show profile in mentor directory" checked={privDirectory} onChange={setPrivDirectory} />
             <ToggleOption label="Show wins in community feed" checked={privWins} onChange={setPrivWins} />
+            <div className="pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
+              <span className="text-xs text-gray-500 dark:text-gray-400">View our full policy and guidelines</span>
+              <button 
+                onClick={() => setActiveTab('legal')} 
+                className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer bg-transparent border-none p-0"
+              >
+                <span>Read Legal Terms</span>
+                <span className="text-sm">→</span>
+              </button>
+            </div>
           </div>
         </div>
 

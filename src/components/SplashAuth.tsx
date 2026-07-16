@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Sparkles, Globe, BrainCircuit, Search, Zap, Code, Lightbulb, Trophy, Target, ArrowRight, Mail, X, Github } from 'lucide-react';
 import { signInWithGoogle, signInWithGithub } from '../lib/firebase';
+import { useAppContext } from '../context/AppContext';
 
 export default function SplashAuth() {
+  const { setActiveTab } = useAppContext();
   const [loading, setLoading] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -278,9 +280,9 @@ export default function SplashAuth() {
          <div className="pt-6 border-t border-[#E2E8F0] flex flex-col md:flex-row items-center justify-between gap-4">
             <span className="text-[13px] text-[#64748B]">&copy; 2026 YuvaHub Inc. All rights reserved.</span>
             <div className="flex gap-6">
-               <a href="#" className="text-[13px] text-[#64748B] hover:text-gray-900">Privacy Policy</a>
-               <a href="#" className="text-[13px] text-[#64748B] hover:text-gray-900">Terms of Service</a>
-               <a href="#" className="text-[13px] text-[#64748B] hover:text-gray-900">Contact Us</a>
+               <button onClick={() => setActiveTab('legal')} className="text-[13px] text-[#64748B] hover:text-gray-900 bg-transparent border-none cursor-pointer p-0 font-medium">Privacy Policy</button>
+               <button onClick={() => setActiveTab('legal')} className="text-[13px] text-[#64748B] hover:text-gray-900 bg-transparent border-none cursor-pointer p-0 font-medium">Terms of Service</button>
+               <a href="mailto:support@yuvahub.com" className="text-[13px] text-[#64748B] hover:text-gray-900">Contact Us</a>
             </div>
          </div>
        </footer>
@@ -324,7 +326,12 @@ export default function SplashAuth() {
             </div>
             
             <div className="mt-8 text-center">
-              <p className="text-xs text-gray-400">By continuing, you agree to YuvaHub's Terms of Service and Privacy Policy.</p>
+              <p className="text-xs text-gray-400">
+                By continuing, you agree to YuvaHub's{' '}
+                <button onClick={() => { setIsModalOpen(false); setActiveTab('legal'); }} className="text-blue-600 hover:underline bg-transparent border-none cursor-pointer p-0 font-medium">Terms of Service</button>
+                {' '}and{' '}
+                <button onClick={() => { setIsModalOpen(false); setActiveTab('legal'); }} className="text-blue-600 hover:underline bg-transparent border-none cursor-pointer p-0 font-medium">Privacy Policy</button>.
+              </p>
             </div>
           </div>
         </div>

@@ -19,6 +19,7 @@ import OpportunityDetail from './components/Tabs/OpportunityDetail';
 import AIAssistant from './components/Tabs/AIAssistant';
 import OnboardingFlow from './components/OnboardingFlow';
 import SplashAuth from './components/SplashAuth';
+import Legal from './components/Tabs/Legal';
 
 function App() {
   const {
@@ -104,6 +105,7 @@ function App() {
       case 'profile': return <Profile />;
       case 'settings': return <SettingsTab />;
       case 'admin': return <AdminDashboard />;
+      case 'legal': return <Legal />;
       default: return <Dashboard />;
     }
   };
@@ -123,6 +125,24 @@ function App() {
           <div className="w-2.5 h-2.5 rounded-full bg-[#2563EB] animate-bounce" style={{ animationDelay: '0ms' }}></div>
           <div className="w-2.5 h-2.5 rounded-full bg-[#2563EB] animate-bounce" style={{ animationDelay: '150ms' }}></div>
           <div className="w-2.5 h-2.5 rounded-full bg-[#2563EB] animate-bounce" style={{ animationDelay: '300ms' }}></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (activeTab === 'legal' && !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="mb-6">
+            <button 
+              onClick={() => setActiveTab('dashboard')} 
+              className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline font-bold bg-transparent border-none cursor-pointer"
+            >
+              ← Back to Home / Login
+            </button>
+          </div>
+          <Legal />
         </div>
       </div>
     );
@@ -296,7 +316,7 @@ function App() {
           <span className="font-medium">{backendReady ? 'Live' : 'Offline'}</span>
           <span className="hidden sm:inline">· Last synced: {lastSyncedTime}</span>
           <span>· Opportunities indexed & verified</span>
-          <span className="hidden md:inline">· YuvaHub © 2026</span>
+          <span className="hidden md:inline">· YuvaHub © 2026 · <button onClick={() => setActiveTab('legal')} className="hover:underline hover:text-white cursor-pointer font-medium bg-transparent border-none p-0 text-xs text-gray-450">Privacy & Terms</button></span>
         </div>
       </main>
 
