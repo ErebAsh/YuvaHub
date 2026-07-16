@@ -10,6 +10,7 @@ import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
 import { z } from "zod";
 import { ScholarshipSchema, AIEvaluationResponseSchema } from "./src/models/scholarshipSchema.js";
+import { isToxic, createToxicityMiddleware } from "./src/services/toxicity.js";
 import rateLimit from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 import Redis from "ioredis";
@@ -2130,6 +2131,203 @@ ${JSON.stringify(userProfile, null, 2)}
          return res.status(502).json({ error: "AI generated invalid schema", details: err.issues });
       }
       res.status(500).json({ error: "Internal Server Error during validation" });
+    }
+  });
+
+  const toxicityMiddleware = createToxicityMiddleware(getGenAI);
+
+  // --- Phase 5 Forum Architecture: Posts, Comments & Upvotes ---
+
+  // 1. Create a Post
+  app.post("/api/v1/posts", async (req, res) => {
+    try {
+      const { title, content, author } = req.body;
+      if (!title || !content || !author) {
+        return res.status(400).json({ error: "Missing title, content, or author" });
+      }
+      if (!db) return res.status(503).json({ error: "Database not available" });
+
+      const post = {
+        title,
+        content,
+        author,
+        upvotes: 0,
+        upvoted_by: [] as string[],
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      const result = await db.collection("posts").insertOne(post);
+      res.status(201).json({ ...post, _id: result.insertedId });
+    } catch (err) {
+      console.error("Create Post Error:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  // 2. Fetch a Post
+  app.get("/api/v1/posts/:postId", async (req, res) => {
+    try {
+      const { postId } = req.params;
+      if (!db) return res.status(503).json({ error: "Database not available" });
+
+      let queryId;
+      try {
+        queryId = new ObjectId(postId);
+      } catch (e) {
+        queryId = postId;
+      }
+
+      const post = await db.collection("posts").findOne({ _id: queryId });
+      if (!post) {
+        return res.status(404).json({ error: "Post not found" });
+      }
+      res.json(post);
+    } catch (err) {
+      console.error("Fetch Post Error:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  // 3. Create a Comment or Reply (Materialized Path, Toxicity classification)
+  app.post("/api/v1/posts/:postId/comments", toxicityMiddleware, async (req, res) => {
+    try {
+      const { postId } = req.params;
+      const { content, author, parentId } = req.body;
+
+      if (!content || !author) {
+        return res.status(400).json({ error: "Missing content or author" });
+      }
+      if (!db) return res.status(503).json({ error: "Database not available" });
+
+      const commentId = new ObjectId();
+      let path = "";
+
+      if (parentId) {
+        let parentQueryId;
+        try {
+          parentQueryId = new ObjectId(parentId);
+        } catch (e) {
+          parentQueryId = parentId;
+        }
+        const parentComment = await db.collection("comments").findOne({ _id: parentQueryId });
+        if (!parentComment) {
+          return res.status(404).json({ error: "Parent comment not found" });
+        }
+        path = parentComment.path + commentId.toString() + ",";
+      } else {
+        path = `,${postId},${commentId.toString()},`;
+      }
+
+      const comment = {
+        _id: commentId,
+        postId,
+        parentId: parentId || null,
+        content,
+        author,
+        path,
+        upvotes: 0,
+        upvoted_by: [] as string[],
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      await db.collection("comments").insertOne(comment);
+      res.status(201).json(comment);
+    } catch (err) {
+      console.error("Create Comment Error:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  // 4. Edit a Comment (Toxicity classification)
+  app.patch("/api/v1/posts/:postId/comments/:commentId", toxicityMiddleware, async (req, res) => {
+    try {
+      const { postId, commentId } = req.params;
+      const { content } = req.body;
+
+      if (!content) {
+        return res.status(400).json({ error: "Missing content" });
+      }
+      if (!db) return res.status(503).json({ error: "Database not available" });
+
+      let queryId;
+      try {
+        queryId = new ObjectId(commentId);
+      } catch (e) {
+        queryId = commentId;
+      }
+
+      const result = await db.collection("comments").findOneAndUpdate(
+        { _id: queryId, postId },
+        { $set: { content, updatedAt: new Date() } },
+        { returnDocument: "after" }
+      );
+
+      const updatedComment = (result as any)?.value || result;
+      if (!updatedComment) {
+        return res.status(404).json({ error: "Comment not found" });
+      }
+      res.json(updatedComment);
+    } catch (err) {
+      console.error("Edit Comment Error:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  // 5. Fetch Comments for a Post (Tree fetched sorted in O(1) read)
+  app.get("/api/v1/posts/:postId/comments", async (req, res) => {
+    try {
+      const { postId } = req.params;
+      if (!db) return res.status(503).json({ error: "Database not available" });
+
+      const comments = await db.collection("comments")
+        .find({ path: new RegExp('^,' + postId + ',') })
+        .sort({ path: 1 })
+        .toArray();
+
+      res.json(comments);
+    } catch (err) {
+      console.error("Fetch Comments Error:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  // 6. Upvote a Post (Transactional and atomic to prevent concurrent race conditions)
+  app.post("/api/v1/posts/:postId/upvote", async (req, res) => {
+    try {
+      const { postId } = req.params;
+      const { userId } = req.body;
+
+      if (!userId) {
+        return res.status(400).json({ error: "Missing userId" });
+      }
+      if (!db) return res.status(503).json({ error: "Database not available" });
+
+      let queryId;
+      try {
+        queryId = new ObjectId(postId);
+      } catch (e) {
+        queryId = postId;
+      }
+
+      const result = await db.collection("posts").updateOne(
+        { _id: queryId, upvoted_by: { $ne: userId } },
+        { $inc: { upvotes: 1 }, $push: { upvoted_by: userId } }
+      );
+
+      if (result.matchedCount === 0) {
+        const post = await db.collection("posts").findOne({ _id: queryId });
+        if (!post) {
+          return res.status(404).json({ error: "Post not found" });
+        }
+        return res.status(409).json({ error: "User has already upvoted this post" });
+      }
+
+      res.json({ success: true, message: "Post upvoted successfully" });
+    } catch (err) {
+      console.error("Upvote Post Error:", err);
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
