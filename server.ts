@@ -1468,6 +1468,14 @@ Return JSON strictly in this format:
     res.json({ success: true });
   });
 
+  app.post("/api/v1/notifications/read-all", (req, res) => {
+  notifications.forEach((notification) => {
+    notification.read = true;
+  });
+
+  res.json({ success: true });
+});
+
   // Health check
   app.get("/api/v1/health", (req, res) => {
     res.json({ 
