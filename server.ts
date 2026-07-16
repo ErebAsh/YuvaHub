@@ -1615,7 +1615,7 @@ Return JSON strictly in this format:
     }
   });
 
-  app.get("/api/v1/search", async (req, res) => {
+  const searchHandler = async (req: express.Request, res: express.Response) => {
     try {
       const q = (req.query.q as string) || "";
       const typesStr = req.query.types as string;
@@ -1627,29 +1627,16 @@ Return JSON strictly in this format:
       const endDateStr = req.query.endDate as string;
       
       if (!db) return res.json({ results: [], meta: { total_found: 0 } });
-      const filter: any = {};
       const andConditions: any[] = [];
 
-      // 1. Text Query Filter
-      if (q) {
-        andConditions.push({
-          $or: [
-            { title: { $regex: q, $options: "i" } },
-            { category: { $regex: q, $options: "i" } },
-            { description: { $regex: q, $options: "i" } },
-            { tags: { $regex: q, $options: "i" } }
-          ]
-        });
-      }
-
-      // 2. Opportunity Type Filter (multiple types supported)
+      // 1. Opportunity Type Filter (multiple types supported)
       if (typesStr) {
         const types = typesStr.split(",").map(t => t.trim());
         const typeRegexes = types.map(t => new RegExp(`^${t.replace(/s$/, "")}$`, "i"));
         andConditions.push({ type: { $in: typeRegexes } });
       }
 
-      // 3. Location Type Filter (Remote, Onsite, Hybrid)
+      // 2. Location Type Filter (Remote, Onsite, Hybrid)
       if (locationTypesStr) {
         const locationTypes = locationTypesStr.split(",").map(l => l.trim().toLowerCase());
         const locFilters: any[] = [];
@@ -1672,7 +1659,7 @@ Return JSON strictly in this format:
         }
       }
 
-      // 4. Stipend / Salary Filter
+      // 3. Stipend / Salary Filter
       if (stipend) {
         if (stipend.toLowerCase() === 'paid') {
           andConditions.push({
@@ -1695,7 +1682,7 @@ Return JSON strictly in this format:
         }
       }
 
-      // 5. Min Salary / Stipend Filter
+      // 4. Min Salary / Stipend Filter
       if (minSalaryVal !== undefined && !isNaN(minSalaryVal) && minSalaryVal > 0) {
         andConditions.push({
           $or: [
@@ -1705,7 +1692,7 @@ Return JSON strictly in this format:
         });
       }
 
-      // 6. Deadline Filter
+      // 5. Deadline Filter
       if (deadlineType && deadlineType !== 'All') {
         const now = new Date();
         if (deadlineType === 'Soon') {
@@ -1734,12 +1721,72 @@ Return JSON strictly in this format:
         }
       }
 
-      if (andConditions.length > 0) {
-        filter.$and = andConditions;
+      let items: any[] = [];
+      if (q) {
+        const pipeline: any[] = [
+          {
+            $search: {
+              index: "default",
+              compound: {
+                should: [
+                  {
+                    text: {
+                      query: q,
+                      path: ["title", "tags"],
+                      fuzzy: { maxEdits: 2 }
+                    }
+                  },
+                  {
+                    text: {
+                      query: q,
+                      path: ["company", "description"]
+                    }
+                  }
+                ]
+              },
+              highlight: {
+                path: ["title", "tags", "company", "description"]
+              }
+            }
+          }
+        ];
+
+        if (andConditions.length > 0) {
+          pipeline.push({ $match: { $and: andConditions } });
+        }
+
+        pipeline.push({
+          $project: {
+            title: 1,
+            description: 1,
+            company: 1,
+            tags: 1,
+            type: 1,
+            location: 1,
+            stipend: 1,
+            price: 1,
+            stipendAmount: 1,
+            salary: 1,
+            deadline: 1,
+            deadlineDate: 1,
+            apply_link: 1,
+            source_quality_score: 1,
+            created_at: 1,
+            highlights: { $meta: "searchHighlights" },
+            score: { $meta: "searchScore" }
+          }
+        });
+
+        pipeline.push({ $limit: 50 });
+        items = await db.collection("opportunities").aggregate(pipeline).toArray();
+      } else {
+        const filter: any = {};
+        if (andConditions.length > 0) {
+          filter.$and = andConditions;
+        }
+        items = await db.collection("opportunities").find(filter).limit(50).toArray();
       }
 
-      const cursor = db.collection("opportunities").find(filter).limit(50);
-      const items = await cursor.toArray();
       let mapped = items.map((doc: any) => {
         const d = { ...doc, id: doc._id.toString() };
         delete d._id;
@@ -1751,10 +1798,13 @@ Return JSON strictly in this format:
         meta: { query: q, total_found: mapped.length }
       });
     } catch(err) {
-      console.error("/api/v1/search error:", err);
+      console.error("Search endpoint error:", err);
       res.status(500).json({ error: "Internal Server Error" });
     }
-  });
+  };
+
+  app.get("/api/v1/search", searchHandler);
+  app.get("/api/opportunities/search", searchHandler);
 
   app.get("/api/v1/opportunity/:id", async (req, res) => {
     try {
