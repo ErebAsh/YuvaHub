@@ -782,6 +782,45 @@ async function startServer() {
     });
   });
 
+  const cacheMiddleware = (ttlSeconds: number, keyGenerator?: (req: express.Request) => string) => {
+    return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      if (!redisClient || redisClient.status !== 'ready') {
+        res.setHeader("X-Cache-Status", "BYPASS");
+        return next();
+      }
+
+      const key = keyGenerator ? keyGenerator(req) : req.originalUrl;
+
+      try {
+        const cached = await redisClient.get(key);
+        if (cached) {
+          res.setHeader("X-Cache-Status", "HIT");
+          return res.json(JSON.parse(cached));
+        }
+      } catch (err) {
+        console.error("[Cache] Redis get error:", err);
+      }
+
+      res.setHeader("X-Cache-Status", "MISS");
+
+      const originalJson = res.json.bind(res);
+      res.json = (body: any) => {
+        try {
+          if (redisClient && redisClient.status === 'ready' && res.statusCode >= 200 && res.statusCode < 300) {
+            redisClient.set(key, JSON.stringify(body), "EX", ttlSeconds).catch((err: any) => {
+              console.error("[Cache] Redis set error:", err);
+            });
+          }
+        } catch (err) {
+          console.error("[Cache] Error stringifying response:", err);
+        }
+        return originalJson(body);
+      };
+
+      next();
+    };
+  };
+
   // --- Real API Routes ---
   app.get("/api/v1/opportunities", async (req, res) => {
     try {
@@ -818,7 +857,7 @@ async function startServer() {
     }
   });
 
-  app.get("/api/v1/opportunities/trending", async (req, res) => {
+  app.get("/api/v1/opportunities/trending", cacheMiddleware(15 * 60), async (req, res) => {
     try {
       if (!db) {
         return res.json({ num_results: 0, next_page: null, next_cursor: null, items: [] });
@@ -1806,7 +1845,7 @@ Return JSON strictly in this format:
   app.get("/api/v1/search", searchHandler);
   app.get("/api/opportunities/search", searchHandler);
 
-  app.get("/api/v1/opportunity/:id", async (req, res) => {
+  app.get("/api/v1/opportunity/:id", cacheMiddleware(60 * 60, (req) => `opportunity:${req.params.id}`), async (req, res) => {
     try {
       const rawId = req.params.id;
 
@@ -1842,6 +1881,45 @@ Return JSON strictly in this format:
       res.json(mapped);
     } catch (err) {
       console.error("/api/v1/opportunity/:id error:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  app.put("/api/v1/opportunity/:id", async (req, res) => {
+    try {
+      if (!db) return res.status(503).json({ error: "Database not available" });
+      const id = req.params.id;
+      
+      const { ObjectId } = await import("mongodb");
+      let queryId;
+      try {
+        queryId = new ObjectId(id);
+      } catch(e) {
+        queryId = id;
+      }
+
+      const updateData = { ...req.body, updated_at: new Date() };
+      delete updateData._id;
+      delete updateData.id;
+
+      const result = await db.collection("opportunities").updateOne(
+        { _id: queryId },
+        { $set: updateData }
+      );
+
+      // Cache invalidation hooks
+      if (redisClient && redisClient.status === 'ready') {
+        try {
+          await redisClient.del(`opportunity:${id}`);
+          await redisClient.del("/api/v1/opportunities/trending"); // also clear trending to prevent stale
+        } catch(err) {
+          console.error("[Cache] Invalidation error:", err);
+        }
+      }
+
+      res.json({ success: true, updated: result.modifiedCount > 0 });
+    } catch (err: any) {
+      console.error("/api/v1/opportunity/:id PUT error:", err);
       res.status(500).json({ error: "Internal Server Error" });
     }
   });
