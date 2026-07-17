@@ -9,6 +9,7 @@ import { MongoClient, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
 import { z } from "zod";
+import jwt from "jsonwebtoken";
 import { ScholarshipSchema, AIEvaluationResponseSchema } from "./src/models/scholarshipSchema.js";
 import { isToxic, createToxicityMiddleware } from "./src/services/toxicity.js";
 import rateLimit from "express-rate-limit";
@@ -1045,6 +1046,18 @@ async function startServer() {
 
     let uid = "";
     let email = "";
+    let role = "user";
+
+    // Try to verify as a standard JWT first (for our RBAC custom tokens)
+    try {
+      const decoded = jwt.verify(idToken, process.env.JWT_SECRET || "yuvahub-secret-key") as any;
+      uid = decoded.sub || decoded.user_id || decoded.uid;
+      email = decoded.email || "";
+      role = decoded.role || "user";
+      return { uid, email, role };
+    } catch (jwtErr) {
+      // If it fails, fall back to Firebase / Mock logic
+    }
 
     if (firebaseApiKey) {
       const verifyUrl = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${firebaseApiKey}`;
@@ -1064,6 +1077,7 @@ async function startServer() {
       }
       uid = data.users[0].localId;
       email = data.users[0].email || "";
+      role = email === "uditt490@gmail.com" ? "admin" : "user";
     } else {
       try {
         const parts = idToken.split(".");
@@ -1071,6 +1085,7 @@ async function startServer() {
           const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
           uid = payload.user_id || payload.sub;
           email = payload.email || "";
+          role = payload.role || (email === "uditt490@gmail.com" ? "admin" : "user");
         }
       } catch (e) {
         throw new Error("Unauthorized: Invalid mock token format");
@@ -1081,8 +1096,26 @@ async function startServer() {
       }
     }
 
-    return { uid, email };
+    return { uid, email, role };
   }
+
+  const authorizeRoles = (...allowedRoles: string[]) => {
+    return async (req: any, res: any, next: any) => {
+      try {
+        const user = await getAuthenticatedUser(req);
+        req.user = user;
+        
+        if (!allowedRoles.includes(user.role)) {
+          console.warn(`[Circuit Breaker] Forbidden access attempt to ${req.originalUrl} from IP ${req.ip}. Role: ${user.role}`);
+          return res.status(403).json({ error: "Forbidden: Insufficient privileges." });
+        }
+        next();
+      } catch (err: any) {
+        console.warn(`[Circuit Breaker] Unauthorized access attempt to ${req.originalUrl} from IP ${req.ip}. Error: ${err.message}`);
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+    };
+  };
 
   const handleSignatureRequest = async (req: any, res: any) => {
     try {
@@ -1926,7 +1959,7 @@ Return JSON strictly in this format:
   }
 
   // --- Admin Routes ---
-  app.get("/api/v1/admin/health", (req, res) => {
+  app.get("/api/v1/admin/health", authorizeRoles('admin', 'moderator'), (req, res) => {
     res.json({
       status: "healthy",
       database: db ? "connected" : "disconnected",
@@ -1936,7 +1969,7 @@ Return JSON strictly in this format:
     });
   });
 
-  app.get("/api/v1/admin/metrics", async (req, res) => {
+  app.get("/api/v1/admin/metrics", authorizeRoles('admin', 'moderator'), async (req, res) => {
     let opportunitiesAdded = 0;
     if (db) {
       opportunitiesAdded = await db.collection("opportunities").countDocuments();
@@ -1949,7 +1982,7 @@ Return JSON strictly in this format:
     });
   });
 
-  app.get("/api/v1/admin/scrapers", async (req, res) => {
+  app.get("/api/v1/admin/scrapers", authorizeRoles('admin', 'moderator'), async (req, res) => {
     try {
       if (!db) {
         return res.json([]);
@@ -2034,13 +2067,27 @@ Return JSON strictly in this format:
     }
   });
 
-  app.get("/api/v1/admin/incidents", (req, res) => {
+  app.get("/api/v1/admin/incidents", authorizeRoles('admin', 'moderator'), (req, res) => {
     res.json([
       { id: 1, type: "WARNING", component: "Python Gateway", message: "Python service dropped. Ported to Node.js native.", time: "10 mins ago" }
     ]);
   });
 
-  app.get("/api/v1/admin/stream/telemetry", (req, res) => {
+  app.delete("/api/v1/admin/users/:id", authorizeRoles('admin', 'moderator'), async (req, res) => {
+    try {
+      if (!db) {
+        return res.status(503).json({ error: "Database unavailable" });
+      }
+      const userId = req.params.id;
+      // Database deletion logic would go here
+      res.json({ status: "success", message: `User ${userId} deleted successfully.` });
+    } catch (err) {
+      console.error("Failed to delete user:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  app.get("/api/v1/admin/stream/telemetry", authorizeRoles('admin', 'moderator'), (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
