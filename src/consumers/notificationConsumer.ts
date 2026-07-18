@@ -1,21 +1,31 @@
 import { OpportunityScrapedEvent } from '../events/schemas';
-import { enqueuePushNotification } from '../queues/pushQueue';
+import { matchOpportunityAndNotify } from '../services/opportunityMatcher';
 
-export async function notificationConsumerHandler(event: OpportunityScrapedEvent) {
-  const payload = event.payload;
+export async function createNotificationConsumer(db: any) {
+  return async (event: OpportunityScrapedEvent) => {
+    const payload = event.payload;
 
-  // In a real application, you might query the DB for users interested in this category
-  // For demonstration, we mock sending a notification for the scraped opportunity
-  const message = `New opportunity posted: ${payload.title} at ${payload.company}`;
-  
-  try {
-    await enqueuePushNotification({
-      userId: 'global-subscribers', // Example
-      message: message
-    });
-    console.log(`[Notification Consumer] Enqueued notification: ${message}`);
-  } catch (error) {
-    console.error(`[Notification Consumer] Failed to enqueue notification:`, error);
-    throw error; // Let RabbitMQ retry or move to dead letter queue
-  }
+    try {
+      // Execute the real-time opportunity matchmaking engine across all users
+      // Map properties from Event to Opportunity document format
+      const opportunityDoc = {
+        id: payload.dedupeHash, // Dedupe hash is our unique identifier
+        _id: payload.dedupeHash,
+        title: payload.title,
+        organization: payload.company,
+        description: payload.description,
+        location: payload.location,
+        deadline: payload.deadline,
+        category: payload.opportunityType,
+        tags: payload.tags || [],
+        apply_link: payload.url
+      };
+
+      await matchOpportunityAndNotify(db, opportunityDoc);
+      console.log(`[Notification Consumer] Successfully processed matchmaking for: ${payload.title}`);
+    } catch (error) {
+      console.error(`[Notification Consumer] Error during matchmaking processing:`, error);
+      throw error; // Let RabbitMQ retry or move to DLQ
+    }
+  };
 }

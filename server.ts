@@ -2,7 +2,8 @@ import express from "express";
 import http from "http";
 import { eventBus } from "./src/events/eventBus";
 import { createOpportunityScrapedConsumer } from "./src/consumers/opportunityScrapedConsumer";
-import { notificationConsumerHandler } from "./src/consumers/notificationConsumer";
+import { createNotificationConsumer } from "./src/consumers/notificationConsumer";
+import { runDeadlineChecks } from "./src/services/deadlineScheduler";
 import { Server } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import path from "path";
@@ -524,6 +525,11 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGBREAK", () => gracefulShutdown("SIGBREAK"));
 
+let ioInstance: any = null;
+export function getSocketIO() {
+  return ioInstance;
+}
+
 async function startServer() {
   const app = express();
   const server = http.createServer(app);
@@ -532,6 +538,7 @@ async function startServer() {
   const corsOptions = frontendUrl ? { origin: frontendUrl } : { origin: "*" };
   
   const io = new Server(server, { cors: corsOptions });
+  ioInstance = io;
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 5173;
 
   // Trust reverse proxy (Cloud Run, nginx / Cloudflare reverse proxies)
@@ -930,6 +937,8 @@ async function startServer() {
           resumePublicId: req.body.resumePublicId || existingUser.resumePublicId,
           coverLetterUrl: req.body.coverLetterUrl || existingUser.coverLetterUrl,
           coverLetterPublicId: req.body.coverLetterPublicId || existingUser.coverLetterPublicId,
+          fcmToken: req.body.fcmToken !== undefined ? req.body.fcmToken : existingUser.fcmToken,
+          notificationPreferences: req.body.notificationPreferences !== undefined ? req.body.notificationPreferences : existingUser.notificationPreferences,
           updatedAt: new Date()
         };
         // Remove undefined keys
@@ -950,6 +959,16 @@ async function startServer() {
           field: req.body.field || "",
           skills: req.body.skills || [],
           bookmarks: [],
+          fcmToken: req.body.fcmToken || "",
+          notificationPreferences: req.body.notificationPreferences || {
+            emailEnabled: true,
+            pushEnabled: true,
+            deadlineRemindersEnabled: true,
+            skillAlertsEnabled: true,
+            scholarshipAlertsEnabled: true,
+            hackathonAlertsEnabled: true,
+            opportunityAlertsEnabled: true
+          },
           createdAt: new Date(),
           updatedAt: new Date()
         };
@@ -1871,36 +1890,120 @@ Return JSON strictly in this format:
   // --- Local Node Services (Non-Proxied) ---
 
   // Notifications API (Remaining in Node for SSE stability)
-  const notifications: any[] = [
-    {
-      id: "welcome",
-      title: "Welcome to YuvaHub! ✨",
-      message: "Ready to find your next break? The real data pipeline is now active.",
-      type: "welcome",
-      time: "Just now",
-      read: false
-    }
-  ];
   const clients: any[] = [];
 
-  app.get("/api/v1/notifications", (req, res) => {
-    res.json(notifications);
+  app.get("/api/v1/notifications", async (req, res) => {
+    try {
+      const user = await getAuthenticatedUser(req);
+      if (!dbQuery) return res.status(503).json({ error: "Database not available" });
+
+      const collection = dbQuery.collection("notifications");
+      let items;
+
+      if (dbQuery.isMock) {
+        // Query the mock DB collection
+        items = collection.data ? collection.data.filter((n: any) => n.userId === user.uid || n.userId === "global-subscribers") : [];
+      } else {
+        items = await collection.find({
+          $or: [
+            { userId: user.uid },
+            { userId: "global-subscribers" }
+          ]
+        }).sort({ createdAt: -1 }).toArray();
+      }
+
+      // Format items to match frontend expectation
+      const formatted = items.map((item: any) => {
+        const copy = { ...item, id: item._id?.toString() || item.id || "welcome" };
+        delete copy._id;
+        
+        // Human readable time description
+        const elapsedMs = Date.now() - new Date(copy.createdAt).getTime();
+        const elapsedMins = Math.floor(elapsedMs / 60000);
+        if (elapsedMins < 1) copy.time = "Just now";
+        else if (elapsedMins < 60) copy.time = `${elapsedMins}m ago`;
+        else {
+          const elapsedHrs = Math.floor(elapsedMins / 60);
+          if (elapsedHrs < 24) copy.time = `${elapsedHrs}h ago`;
+          else copy.time = new Date(copy.createdAt).toLocaleDateString();
+        }
+
+        return copy;
+      });
+
+      res.json(formatted);
+    } catch (err: any) {
+      console.error("GET /api/v1/notifications error:", err);
+      res.json([
+        {
+          id: "welcome",
+          title: "Welcome to YuvaHub! ✨",
+          message: "Ready to find your next break? The real data pipeline is active.",
+          type: "welcome",
+          time: "Just now",
+          read: false
+        }
+      ]);
+    }
   });
 
-  app.post("/api/v1/notifications/:id/read", (req, res) => {
-    const { id } = req.params;
-    const notif = notifications.find(n => n.id === id);
-    if (notif) notif.read = true;
-    res.json({ success: true });
+  app.post("/api/v1/notifications/:id/read", async (req, res) => {
+    try {
+      const user = await getAuthenticatedUser(req);
+      const { id } = req.params;
+      if (!dbCommand) return res.status(503).json({ error: "Database not available" });
+
+      const collection = dbCommand.collection("notifications");
+      let queryId;
+      try {
+        queryId = new ObjectId(id);
+      } catch (e) {
+        queryId = id;
+      }
+
+      if (dbCommand.isMock) {
+        const notif = collection.data ? collection.data.find((n: any) => n.id === id || n._id?.toString() === id) : null;
+        if (notif) notif.read = true;
+      } else {
+        await collection.updateOne(
+          { _id: queryId, userId: user.uid },
+          { $set: { read: true } }
+        );
+      }
+
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("POST /api/v1/notifications/:id/read error:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
   });
 
-  app.post("/api/v1/notifications/read-all", (req, res) => {
-  notifications.forEach((notification) => {
-    notification.read = true;
-  });
+  app.post("/api/v1/notifications/read-all", async (req, res) => {
+    try {
+      const user = await getAuthenticatedUser(req);
+      if (!dbCommand) return res.status(503).json({ error: "Database not available" });
 
-  res.json({ success: true });
-});
+      const collection = dbCommand.collection("notifications");
+
+      if (dbCommand.isMock) {
+        if (collection.data) {
+          collection.data.forEach((n: any) => {
+            if (n.userId === user.uid) n.read = true;
+          });
+        }
+      } else {
+        await collection.updateMany(
+          { userId: user.uid },
+          { $set: { read: true } }
+        );
+      }
+
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("POST /api/v1/notifications/read-all error:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
 
   // Health check
   app.get("/api/v1/health", (req, res) => {
@@ -2828,9 +2931,19 @@ async function bootstrap() {
     await eventBus.subscribe('dnl.opportunity.scraped.db', 'opportunity.scraped', dbConsumer);
 
     // Setup Notification consumer
-    await eventBus.subscribe('dnl.opportunity.scraped.notification', 'opportunity.scraped', notificationConsumerHandler);
+    const notificationConsumer = await createNotificationConsumer(dbCommand);
+    await eventBus.subscribe('dnl.opportunity.scraped.notification', 'opportunity.scraped', notificationConsumer);
 
     console.log('[EventBus] Consumers initialized successfully');
+
+    // Run initial deadline checks and start daily interval scheduler
+    if (dbCommand && !dbCommand.isMock) {
+      void runDeadlineChecks(dbCommand);
+      setInterval(() => {
+        void runDeadlineChecks(dbCommand);
+      }, 86400000); // 24 hours
+      console.log('[Scheduler] Deadline check scheduler initiated successfully');
+    }
   } catch (err) {
     console.error("Failed to start event bus and consumers", err);
   }

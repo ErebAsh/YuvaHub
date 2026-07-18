@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Bell, Info, Loader2, MapPin, Zap } from 'lucide-react';
+import { io } from 'socket.io-client';
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -16,7 +17,7 @@ interface Notification {
   read?: boolean;
 }
 
-export default function NotificationDropdown({ profile }: { profile: unknown }) {
+export default function NotificationDropdown({ profile }: { profile: any }) {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -56,36 +57,28 @@ export default function NotificationDropdown({ profile }: { profile: unknown }) 
   useEffect(() => {
     void loadNotifications();
 
-    const eventSource = new EventSource('/api/v1/admin/stream/telemetry');
+    if (profile && profile.uid) {
+      const socket = io();
 
-    const handleNotification = (event: MessageEvent<string>) => {
-      try {
-        const newNotification = JSON.parse(event.data) as Notification;
-        if (!newNotification?.id) return;
+      socket.on(`NOTIFICATION_RECEIVED_${profile.uid}`, (newNotification: any) => {
+        try {
+          if (!newNotification?.id) return;
 
-        setNotifications((current) => {
-          if (current.some((notification) => notification.id === newNotification.id)) {
-            return current;
-          }
-          return [newNotification, ...current];
-        });
-      } catch {
-        // Ignore malformed telemetry events.
-      }
-    };
+          setNotifications((current) => {
+            if (current.some((n) => n.id === newNotification.id)) {
+              return current;
+            }
+            return [newNotification, ...current];
+          });
+        } catch (err) {
+          console.error("[NotificationDropdown] WebSocket error:", err);
+        }
+      });
 
-    eventSource.addEventListener(
-      'NOTIFICATION_RECEIVED',
-      handleNotification as EventListener,
-    );
-
-    return () => {
-      eventSource.removeEventListener(
-        'NOTIFICATION_RECEIVED',
-        handleNotification as EventListener,
-      );
-      eventSource.close();
-    };
+      return () => {
+        socket.disconnect();
+      };
+    }
   }, [profile, loadNotifications]);
 
   useEffect(() => {

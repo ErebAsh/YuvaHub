@@ -43,6 +43,7 @@
     "meilisearch": "^0.59.0",
     "mongodb": "^7.2.0",
     "motion": "^12.23.24",
+    "nodemailer": "^9.0.3",
     "opossum": "^10.0.0",
     "rate-limit-redis": "^5.0.0",
     "react": "^19.0.0",
@@ -58,6 +59,7 @@
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.14.0",
+    "@types/nodemailer": "^8.0.1",
     "@types/opossum": "^8.1.9",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.28.0",

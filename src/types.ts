@@ -39,7 +39,20 @@ export interface UserProfile {
   coverLetterPublicId?: string;
   onboarded?: boolean;
   bookmarks?: string[];
+  fcmToken?: string;
+  notificationPreferences?: NotificationPreferences;
 }
+
+export interface NotificationPreferences {
+  emailEnabled: boolean;
+  pushEnabled: boolean;
+  deadlineRemindersEnabled: boolean;
+  skillAlertsEnabled: boolean;
+  scholarshipAlertsEnabled: boolean;
+  hackathonAlertsEnabled: boolean;
+  opportunityAlertsEnabled: boolean;
+}
+
 
 export interface MentorApplication {
   id: string;

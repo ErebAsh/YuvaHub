@@ -7,6 +7,7 @@ export interface EmailJobData {
   to: string;
   subject: string;
   body: string;
+  html?: string;
 }
 
 export const enqueueEmail = async (data: EmailJobData) => {
