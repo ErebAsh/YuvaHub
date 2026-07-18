@@ -348,22 +348,31 @@ class MemoryCollection {
   constructor(initialData: any[] = []) { this.data = initialData; }
   find(query: any = {}) {
     let result = this.data;
-    if (query.id) result = result.filter(r => r.id === query.id || r._id === query.id || r._id?.toString() === query.id);
-    if (query._id) result = result.filter(r => r.id === query._id.toString() || r._id?.toString() === query._id.toString() || r.id === query._id);
-    if (query.$text) result = result.filter(r => JSON.stringify(r).toLowerCase().includes(query.$text.$search.toLowerCase()));
-    
-    if (query.$or) {
-      result = result.filter(r => {
-        return query.$or.some((cond: any) => {
-          for (let key in cond) {
-            if (cond[key].$regex) {
-              const regex = new RegExp(cond[key].$regex, cond[key].$options || "");
-              if (regex.test(r[key])) return true;
+    for (const key in query) {
+      if (key === 'id') {
+        result = result.filter(r => r.id === query.id || r._id === query.id || r._id?.toString() === query.id);
+      } else if (key === '_id') {
+        result = result.filter(r => r.id === query._id.toString() || r._id?.toString() === query._id.toString() || r.id === query._id);
+      } else if (key === '$text') {
+        result = result.filter(r => JSON.stringify(r).toLowerCase().includes(query.$text.$search.toLowerCase()));
+      } else if (key === '$or') {
+        result = result.filter(r => {
+          return query.$or.some((cond: any) => {
+            for (let k in cond) {
+              if (cond[k].$regex) {
+                const regex = new RegExp(cond[k].$regex, cond[k].$options || "");
+                if (regex.test(r[k])) return true;
+              } else {
+                if (r[k] === cond[k]) return true;
+              }
             }
-          }
-          return false;
+            return false;
+          });
         });
-      });
+      } else {
+        // Generic key-value match
+        result = result.filter(r => r[key] === query[key]);
+      }
     }
 
     const cursor = {
@@ -377,9 +386,52 @@ class MemoryCollection {
     const res = await this.find(query).toArray();
     return res[0] || null;
   }
-  async updateOne(query: any, update: any, options: any) { return { upsertedCount: 1 }; }
+  async updateOne(query: any, update: any, options: any = {}) {
+    const item = await this.findOne(query);
+    if (item) {
+      if (update.$set) {
+        Object.assign(item, update.$set);
+      }
+      if (update.$addToSet) {
+        for (const key in update.$addToSet) {
+          if (!Array.isArray(item[key])) {
+            item[key] = [];
+          }
+          const val = update.$addToSet[key];
+          if (!item[key].includes(val)) {
+            item[key].push(val);
+          }
+        }
+      }
+      if (update.$pull) {
+        for (const key in update.$pull) {
+          if (Array.isArray(item[key])) {
+            const val = update.$pull[key];
+            item[key] = item[key].filter((x: any) => x !== val);
+          }
+        }
+      }
+      return { modifiedCount: 1 };
+    }
+    if (options.upsert) {
+      const doc = { ...query };
+      if (update.$set) Object.assign(doc, update.$set);
+      this.data.push(doc);
+      return { upsertedCount: 1, upsertedId: "mock_upsert_id" };
+    }
+    return { modifiedCount: 0 };
+  }
   async insertOne(doc: any) { this.data.push(doc); return { insertedId: "mock_id" }; }
+  async deleteOne(query: any) {
+    const initialLen = this.data.length;
+    const item = await this.findOne(query);
+    if (item) {
+      this.data = this.data.filter(r => r !== item);
+    }
+    return { deletedCount: this.data.length < initialLen ? 1 : 0 };
+  }
   async countDocuments() { return this.data.length; }
+  async createIndex(keys: any, options: any) { return "mock_index"; }
   aggregate() { return { toArray: async () => [] }; }
   initializeUnorderedBulkOp() {
     const ops: any[] = [];
@@ -432,6 +484,9 @@ if (commandUri && queryUri) {
       .then(() => console.log(`[Database] Created compound index on opportunities`))
       .catch((err: any) => console.error(`[Database] Failed to create index:`, err));
 
+    dbQuery.collection("users").createIndex({ uid: 1 }, { unique: true })
+      .then(() => console.log(`[Database] Created unique index on users.uid`))
+      .catch((err: any) => console.error(`[Database] Failed to create index on users.uid:`, err));
     dbCommand.collection("users").createIndex({ firebaseUid: 1 }, { unique: true })
       .then(() => console.log(`[Database] Created unique index on users.firebaseUid`))
       .catch((err: any) => console.error(`[Database] Failed to create unique index:`, err));
@@ -1030,6 +1085,7 @@ async function startServer() {
           year: req.body.year || existingUser.year,
           field: req.body.field || existingUser.field,
           skills: req.body.skills || existingUser.skills,
+          bookmarks: req.body.bookmarks !== undefined ? req.body.bookmarks : (existingUser.bookmarks || []),
           avatarPublicId: req.body.avatarPublicId || existingUser.avatarPublicId,
           resumeUrl: req.body.resumeUrl || existingUser.resumeUrl,
           resumePublicId: req.body.resumePublicId || existingUser.resumePublicId,
@@ -1087,6 +1143,98 @@ async function startServer() {
     } catch (err: any) {
       console.error("[Auth] Error syncing user:", err);
       res.status(500).json({ error: "Internal Server Error during auth sync" });
+    }
+  });
+
+  // --- Bookmarks API ---
+
+  // Get user's bookmarks
+  app.get("/api/v1/bookmarks", async (req, res) => {
+    try {
+      const user = await getAuthenticatedUser(req);
+      if (!dbQuery) return res.status(503).json({ error: "Database not available" });
+
+      const userDoc = await dbQuery.collection("users").findOne({ uid: user.uid });
+      if (!userDoc) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const bookmarks = userDoc.bookmarks || [];
+      res.json({
+        status: "success",
+        bookmarks
+      });
+    } catch (err: any) {
+      console.error("GET /api/v1/bookmarks error:", err);
+      res.status(err.message?.startsWith("Unauthorized") ? 401 : 500).json({ error: err.message || "Internal Server Error" });
+    }
+  });
+
+  // Add a bookmark
+  app.post("/api/v1/bookmarks", async (req, res) => {
+    try {
+      const user = await getAuthenticatedUser(req);
+      if (!dbQuery) return res.status(503).json({ error: "Database not available" });
+
+      const { opportunityId } = req.body;
+      if (!opportunityId) {
+        return res.status(400).json({ error: "Missing opportunityId" });
+      }
+
+      // Check if opportunity exists (foreign key validation)
+      const { ObjectId } = await import("mongodb");
+      let query;
+      try {
+        query = { _id: new ObjectId(opportunityId) };
+      } catch (e) {
+        query = { id: opportunityId };
+      }
+      const opp = await dbQuery.collection("opportunities").findOne(query);
+      if (!opp) {
+        return res.status(404).json({ error: "Opportunity not found" });
+      }
+
+      const usersCollection = dbQuery.collection("users");
+      // Add to bookmarks, ensuring uniqueness (duplicate prevention)
+      await usersCollection.updateOne(
+        { uid: user.uid },
+        { $addToSet: { bookmarks: opportunityId } }
+      );
+
+      res.json({
+        status: "success",
+        message: "Bookmark added successfully"
+      });
+    } catch (err: any) {
+      console.error("POST /api/v1/bookmarks error:", err);
+      res.status(err.message?.startsWith("Unauthorized") ? 401 : 500).json({ error: err.message || "Internal Server Error" });
+    }
+  });
+
+  // Delete a bookmark
+  app.delete("/api/v1/bookmarks/:opportunityId", async (req, res) => {
+    try {
+      const user = await getAuthenticatedUser(req);
+      if (!dbQuery) return res.status(503).json({ error: "Database not available" });
+
+      const { opportunityId } = req.params;
+      if (!opportunityId) {
+        return res.status(400).json({ error: "Missing opportunityId" });
+      }
+
+      const usersCollection = dbQuery.collection("users");
+      await usersCollection.updateOne(
+        { uid: user.uid },
+        { $pull: { bookmarks: opportunityId } }
+      );
+
+      res.json({
+        status: "success",
+        message: "Bookmark removed successfully"
+      });
+    } catch (err: any) {
+      console.error("DELETE /api/v1/bookmarks/:opportunityId error:", err);
+      res.status(err.message?.startsWith("Unauthorized") ? 401 : 500).json({ error: err.message || "Internal Server Error" });
     }
   });
 
