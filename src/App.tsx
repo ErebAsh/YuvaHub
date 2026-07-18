@@ -26,6 +26,8 @@ import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import Cookies from './pages/Cookies';
 import Guidelines from './pages/Guidelines';
+import About from './pages/About';
+import AboutTab from './components/Tabs/About';
 
 function App() {
   const {
@@ -118,6 +120,7 @@ function App() {
       case 'guidelines': return <Guidelines />;
       case 'legal': return <Legal />;
       case 'support': return <Support />;
+      case 'about': return <AboutTab />;
       default: return <Dashboard />;
     }
   };
@@ -142,7 +145,7 @@ function App() {
     );
   }
 
-  if ((activeTab === 'legal' || activeTab === 'security' || activeTab === 'support') && !user) {
+  if ((activeTab === 'legal' || activeTab === 'security' || activeTab === 'support' || activeTab === 'about') && !user) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
@@ -154,7 +157,7 @@ function App() {
               ← Back to Home / Login
             </button>
           </div>
-          {activeTab === 'legal' ? <Legal /> : activeTab === 'security' ? <Security /> : <Support />}
+          {activeTab === 'legal' ? <Legal /> : activeTab === 'security' ? <Security /> : activeTab === 'about' ? <AboutTab /> : <Support />}
         </div>
       </div>
     );
@@ -332,7 +335,7 @@ function App() {
           <span className="font-medium">{backendReady ? 'Live' : 'Offline'}</span>
           <span className="hidden sm:inline">· Last synced: {lastSyncedTime}</span>
           <span>· Opportunities indexed & verified</span>
-          <span className="hidden md:inline">· YuvaHub © 2026 · <button onClick={() => setActiveTab('privacy')} className="hover:underline hover:text-white cursor-pointer font-medium bg-transparent border-none p-0 text-xs text-gray-450 font-medium font-semibold">Privacy Policy</button> · <button onClick={() => setActiveTab('terms')} className="hover:underline hover:text-white cursor-pointer font-medium bg-transparent border-none p-0 text-xs text-gray-450 font-medium font-semibold">Terms of Service</button> · <button onClick={() => setActiveTab('cookies')} className="hover:underline hover:text-white cursor-pointer font-medium bg-transparent border-none p-0 text-xs text-gray-450 font-medium">Cookie Policy</button> · <button onClick={() => setActiveTab('guidelines')} className="hover:underline hover:text-white cursor-pointer font-medium bg-transparent border-none p-0 text-xs text-gray-450 font-medium">Guidelines</button> · <button onClick={() => setActiveTab('legal')} className="hover:underline hover:text-white cursor-pointer font-medium bg-transparent border-none p-0 text-xs text-gray-400">Legal Index</button> · <button onClick={() => setActiveTab('security')} className="hover:underline hover:text-white cursor-pointer font-medium bg-transparent border-none p-0 text-xs text-gray-400">Security Center</button></span>
+          <span className="hidden md:inline">· YuvaHub © 2026 · <button onClick={() => setActiveTab('about')} className="hover:underline hover:text-white cursor-pointer font-medium bg-transparent border-none p-0 text-xs text-gray-400">About</button> · <button onClick={() => setActiveTab('privacy')} className="hover:underline hover:text-white cursor-pointer font-medium bg-transparent border-none p-0 text-xs text-gray-450 font-medium font-semibold">Privacy Policy</button> · <button onClick={() => setActiveTab('terms')} className="hover:underline hover:text-white cursor-pointer font-medium bg-transparent border-none p-0 text-xs text-gray-450 font-medium font-semibold">Terms of Service</button> · <button onClick={() => setActiveTab('cookies')} className="hover:underline hover:text-white cursor-pointer font-medium bg-transparent border-none p-0 text-xs text-gray-450 font-medium">Cookie Policy</button> · <button onClick={() => setActiveTab('guidelines')} className="hover:underline hover:text-white cursor-pointer font-medium bg-transparent border-none p-0 text-xs text-gray-450 font-medium">Guidelines</button> · <button onClick={() => setActiveTab('legal')} className="hover:underline hover:text-white cursor-pointer font-medium bg-transparent border-none p-0 text-xs text-gray-400">Legal Index</button> · <button onClick={() => setActiveTab('security')} className="hover:underline hover:text-white cursor-pointer font-medium bg-transparent border-none p-0 text-xs text-gray-400">Security Center</button></span>
         </div>
       </main>
 

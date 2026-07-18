@@ -287,6 +287,8 @@ export default function SplashAuth() {
          <div className="pt-6 border-t border-border-theme flex flex-col md:flex-row items-center justify-between gap-4">
             <span className="text-[13px] text-text-secondary">&copy; 2026 YuvaHub Inc. All rights reserved.</span>
             <div className="flex flex-wrap gap-6">
+               {/* About link — navigates to the About page even before login */}
+               <button onClick={() => setActiveTab('about')} className="text-[13px] text-text-secondary hover:text-text-primary bg-transparent border-none cursor-pointer p-0 font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">About Us</button>
                <button onClick={() => setActiveTab('privacy')} className="text-[13px] text-text-secondary hover:text-text-primary bg-transparent border-none cursor-pointer p-0 font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">Privacy Policy</button>
                <button onClick={() => setActiveTab('terms')} className="text-[13px] text-text-secondary hover:text-text-primary bg-transparent border-none cursor-pointer p-0 font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">Terms of Service</button>
                <button onClick={() => setActiveTab('cookies')} className="text-[13px] text-text-secondary hover:text-text-primary bg-transparent border-none cursor-pointer p-0 font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">Cookie Policy</button>
