@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 import { MongoClient, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
+import rateLimit from "express-rate-limit";
 
 dotenv.config();
 
@@ -233,6 +234,28 @@ async function startServer() {
 
   app.use(cors(corsOptions));
   app.use(express.json());
+
+  // --- Rate Limiting Middlewares ---
+  const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per window
+    message: { error: "Too Many Requests", message: "You have exceeded your 100 requests in 15 minutes limit!" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  const aiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // Limit each IP to 10 requests per window for AI
+    message: { error: "Too Many Requests", message: "You have exceeded your 10 AI requests in 15 minutes limit!" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  // Apply general limiter to all API endpoints
+  app.use("/api/", generalLimiter);
+  // Apply strict AI limiter specifically to AI endpoints
+  app.use("/api/ai/", aiLimiter);
 
   // --- DNS-AID Agent Discovery Endpoints ---
   app.get("/.well-known/agents/:file", (req, res) => {
