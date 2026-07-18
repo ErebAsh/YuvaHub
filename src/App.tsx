@@ -26,7 +26,7 @@ import HelpCenter from './components/Tabs/HelpCenter';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import Cookies from './pages/Cookies';
-import Guidelines from './pages/Guidelines';
+import Guidelines from './components/Tabs/Guidelines';
 import About from './pages/About';
 import AboutTab from './components/Tabs/About';
 import HelpCenterPage from './pages/HelpCenter';
@@ -151,7 +151,7 @@ function App() {
     );
   }
 
-  if ((activeTab === 'legal' || activeTab === 'security' || activeTab === 'support' || activeTab === 'about') && !user) {
+  if ((activeTab === 'legal' || activeTab === 'security' || activeTab === 'support' || activeTab === 'about' || activeTab === 'guidelines') && !user) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
@@ -163,7 +163,7 @@ function App() {
               ← Back to Home / Login
             </button>
           </div>
-          {activeTab === 'legal' ? <Legal /> : activeTab === 'security' ? <Security /> : activeTab === 'about' ? <AboutTab /> : <Support />}
+          {activeTab === 'legal' ? <Legal /> : activeTab === 'security' ? <Security /> : activeTab === 'about' ? <AboutTab /> : activeTab === 'guidelines' ? <Guidelines /> : <Support />}
         </div>
       </div>
     );

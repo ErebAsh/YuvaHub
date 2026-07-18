@@ -292,6 +292,13 @@ export default function SettingsTab() {
               >
                 Support & Feedback
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('guidelines')}
+                className="clean-btn-outline text-xs px-4 py-2 cursor-pointer"
+              >
+                Community Guidelines
+              </button>
             </div>
           </div>
         </div>
