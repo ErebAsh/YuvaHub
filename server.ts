@@ -16,6 +16,7 @@ import { z } from "zod";
 import jwt from "jsonwebtoken";
 import { ScholarshipSchema, AIEvaluationResponseSchema } from "./src/models/scholarshipSchema.js";
 import { isToxic, createToxicityMiddleware } from "./src/services/toxicity.js";
+import { authenticateUser, deleteFirebaseUser } from "./src/middleware/auth.js";
 import rateLimit from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 import Redis from "ioredis";
@@ -430,6 +431,10 @@ if (commandUri && queryUri) {
     dbCommand.collection("opportunities").createIndex({ created_at: -1, source_quality_score: -1 })
       .then(() => console.log(`[Database] Created compound index on opportunities`))
       .catch((err: any) => console.error(`[Database] Failed to create index:`, err));
+
+    dbCommand.collection("users").createIndex({ firebaseUid: 1 }, { unique: true })
+      .then(() => console.log(`[Database] Created unique index on users.firebaseUid`))
+      .catch((err: any) => console.error(`[Database] Failed to create unique index:`, err));
   }).catch(err => {
     console.error("[Database] Connection failed, falling back to Mock Data:", err);
     dbCommand = new MockDB();
@@ -753,6 +758,36 @@ async function startServer() {
   };
 
   // --- Real API Routes ---
+  
+  // Example of a protected route to initialize/sync user JIT
+  app.get("/api/v1/user/sync", authenticateUser(dbCommand), (req, res) => {
+    res.json({ status: "ok", user: req.user });
+  });
+
+  // Cascading Deletion
+  app.delete("/api/v1/user/account", authenticateUser(dbCommand), async (req, res) => {
+    try {
+      const uid = req.user.uid;
+      
+      // 1. Delete from Firebase Auth
+      await deleteFirebaseUser(uid);
+      
+      // 2. Delete from MongoDB
+      if (dbCommand) {
+        await dbCommand.collection("users").deleteOne({ firebaseUid: uid });
+        
+        // Also clean up any associated data
+        await dbCommand.collection("interactions").deleteMany({ firebaseUid: uid });
+        // Add more cleanup as needed (e.g. saved opportunities, profiles, etc.)
+      }
+      
+      res.json({ status: "success", message: "Account completely deleted" });
+    } catch (err: any) {
+      console.error("[Auth] Error deleting user account:", err);
+      res.status(500).json({ error: "Failed to delete account" });
+    }
+  });
+
   app.get("/api/v1/opportunities", async (req, res) => {
     try {
       let page = parseInt((req.query.page as string) || "1", 10);

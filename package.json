@@ -16,7 +16,8 @@
     "test-dnl": "tsx src/services/dnl/validationTest.ts",
     "test-cqrs": "tsx tests/test-cqrs.ts",
     "test-scraper": "tsx tests/test-scraper.ts",
-    "test-semantic-search": "tsx tests/test-semantic-search.ts"
+    "test-semantic-search": "tsx tests/test-semantic-search.ts",
+    "test-auth": "tsx tests/test-jit-auth.ts"
   },
   "dependencies": {
     "@bull-board/api": "^8.1.2",
@@ -40,6 +41,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "firebase": "^12.16.0",
+    "firebase-admin": "^14.2.0",
     "http-proxy-middleware": "^4.0.0",
     "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.3",
