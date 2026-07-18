@@ -99,7 +99,7 @@ async function runCQRSTest() {
        console.error(await postRes.text());
        throw new Error(`Failed to create post. Status: ${postRes.status}`);
     }
-    const createdPost = await postRes.json();
+    const createdPost = (await postRes.json()) as any;
     console.log(`[Test] Post created with ID: ${createdPost._id}`);
 
     // 4. Verify the post exists ONLY in the Command DB
@@ -137,7 +137,7 @@ async function runCQRSTest() {
     if (!getRes.ok) {
        throw new Error(`Failed to read post. Status: ${getRes.status}`);
     }
-    const fetchedPost = await getRes.json();
+    const fetchedPost = (await getRes.json()) as any;
     
     if (fetchedPost._id !== queryPostId.toString()) {
       throw new Error("Fetched post ID does not match!");

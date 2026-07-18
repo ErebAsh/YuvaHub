@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import admin from 'firebase-admin';
+import { initializeApp, cert } from 'firebase-admin';
+import { getAuth } from 'firebase-admin/auth';
 
 let isFirebaseInitialized = false;
 
@@ -7,13 +8,13 @@ let isFirebaseInitialized = false;
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
     const serviceAccount = JSON.parse(Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8'));
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
+    initializeApp({
+      credential: cert(serviceAccount)
     });
     isFirebaseInitialized = true;
     console.log("[Auth] Firebase Admin initialized with provided service account.");
   } else if (process.env.FIREBASE_PROJECT_ID) {
-     admin.initializeApp({
+     initializeApp({
         projectId: process.env.FIREBASE_PROJECT_ID,
      });
      isFirebaseInitialized = true;
@@ -61,7 +62,7 @@ export const authenticateUser = (dbCommand: any) => {
              throw new Error("Invalid mock token");
          }
       } else {
-         decodedToken = await admin.auth().verifyIdToken(token);
+         decodedToken = await getAuth().verifyIdToken(token);
       }
 
       req.user = decodedToken;
@@ -101,7 +102,7 @@ export const authenticateUser = (dbCommand: any) => {
 
 export const deleteFirebaseUser = async (uid: string) => {
     if (isFirebaseInitialized) {
-        await admin.auth().deleteUser(uid);
+        await getAuth().deleteUser(uid);
     } else {
         console.warn(`[Auth] Mock mode: Firebase user ${uid} deletion skipped.`);
     }

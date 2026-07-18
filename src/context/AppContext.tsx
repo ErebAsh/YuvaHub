@@ -61,6 +61,19 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === 'undefined') return 'dashboard';
+    const path = window.location.pathname;
+    if (path === '/') return 'dashboard';
+    const tabName = path.substring(1);
+    const publicTabs = ['opportunities', 'about', 'privacy', 'terms', 'cookies', 'guidelines', 'security', 'support', 'legal'];
+    if (publicTabs.includes(tabName)) return tabName;
+    const privateTabs = ['dashboard', 'bookmarks', 'submit', 'mentorship', 'community', 'profile', 'settings', 'admin', 'ai_assistant'];
+    if (privateTabs.includes(tabName)) return tabName;
+    return 'dashboard';
+  });
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
 const [activeTab, setActiveTab] = useState("home");
 const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -91,6 +104,12 @@ const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
   const [selectedOppId, setSelectedOppId] = useState<string | null>(null);
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
   const [gettingStartedStep, setGettingStartedStep] = useState<string | null>(null);
+  const [selectedOppId, setSelectedOppId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const oppMatch = window.location.pathname.match(/^\/opportunity\/([^/]+)/);
+    return oppMatch ? oppMatch[1] : null;
+  });
+  const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -206,8 +225,22 @@ const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
 
   useEffect(() => {
     const handleLocationChange = () => {
-      const oppMatch = window.location.pathname.match(/^\/opportunity\/([^/]+)/);
-      setSelectedOppId(oppMatch ? oppMatch[1] : null);
+      const path = window.location.pathname;
+      const oppMatch = path.match(/^\/opportunity\/([^/]+)/);
+      if (oppMatch) {
+         setSelectedOppId(oppMatch[1]);
+      } else {
+         setSelectedOppId(null);
+         if (path === '/') {
+           setActiveTab('dashboard');
+         } else {
+           const tabName = path.substring(1);
+           const allTabs = ['opportunities', 'about', 'privacy', 'terms', 'cookies', 'guidelines', 'security', 'support', 'legal', 'dashboard', 'bookmarks', 'submit', 'mentorship', 'community', 'profile', 'settings', 'admin', 'ai_assistant'];
+           if (allTabs.includes(tabName)) {
+             setActiveTab(tabName);
+           }
+         }
+      }
     };
     window.addEventListener('popstate', handleLocationChange);
     return () => window.removeEventListener('popstate', handleLocationChange);
@@ -227,6 +260,16 @@ const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
   }, []);
 
   // ─── Auth + profile sync ──────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (selectedOppId) return; // handled by viewOpportunity
+    if (typeof window === 'undefined') return;
+    const currentPath = window.location.pathname;
+    const expectedPath = activeTab === 'dashboard' ? '/' : `/${activeTab}`;
+    if (currentPath !== expectedPath) {
+      window.history.pushState(null, '', expectedPath);
+    }
+  }, [activeTab, selectedOppId]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -408,13 +451,13 @@ isBookmarked,
       setSelectedOppId,
       viewOpportunity,
       clearSelectedOpportunity,
+      bookmarkedIds,
+      toggleBookmark,
+      isBookmarked,
       theme,
       toggleTheme,
       gettingStartedStep,
-      setGettingStartedStep,
-      bookmarkedIds,
-      toggleBookmark,
-      isBookmarked
+      setGettingStartedStep
     }}>
       {children}
     </AppContext.Provider>

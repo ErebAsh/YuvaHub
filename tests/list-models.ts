@@ -11,7 +11,7 @@ async function listModels() {
   try {
     const response = await ai.models.list();
     for await (const model of response) {
-      console.log(`- ${model.name} (Methods: ${model.supportedGenerationMethods?.join(', ')})`);
+      console.log(`- ${model.name} (Methods: ${(model as any).supportedGenerationMethods?.join(', ')})`);
     }
   } catch (err: any) {
     console.error("Error listing models:", err.message);

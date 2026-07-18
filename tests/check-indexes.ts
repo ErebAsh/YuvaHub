@@ -19,7 +19,7 @@ async function checkIndex() {
       console.log("❌ NO ATLAS SEARCH INDEXES FOUND. You have not created the index in the MongoDB Atlas dashboard yet!");
     } else {
       console.log(`✅ Found ${indexes.length} search index(es):`);
-      indexes.forEach(idx => {
+      indexes.forEach((idx: any) => {
         console.log(`\n- Name: ${idx.name}`);
         console.log(`- Status: ${idx.status}`);
         console.log(`- Queryable: ${idx.queryable}`);
