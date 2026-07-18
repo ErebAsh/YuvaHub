@@ -690,6 +690,24 @@ export default function HelpCenter() {
           })}
         </div>
       </section>
+
+      {/* Community Guidelines callout */}
+      <div className="mt-12 p-6 md:p-8 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 border border-blue-100 dark:border-gray-700 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+        <div>
+          <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">Community Guidelines</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed max-w-md">
+            Learn how to participate respectfully, understand our moderation policies, and help keep YuvaHub safe for everyone.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveTab('guidelines')}
+          className="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all duration-200 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
+          <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+          Read Guidelines
+        </button>
+      </div>
     </div>
   );
 }
