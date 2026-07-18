@@ -540,7 +540,7 @@ async function startServer() {
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 5173;
 
   // Trust reverse proxy (Cloud Run, nginx / Cloudflare reverse proxies)
-  app.set('trust proxy', true);
+  app.set('trust proxy', 1);
 
   const serverAdapter = new ExpressAdapter();
   serverAdapter.setBasePath('/admin/queues');
