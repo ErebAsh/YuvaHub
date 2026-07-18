@@ -5,17 +5,17 @@ import { searchOpportunities, trackInteraction } from '../../services/apiClient'
 import { AsyncState } from '../ui/states';
 import { useAppContext } from '../../context/AppContext';
 import { OpportunityCard } from '../OpportunityCard';
-import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 
 export default function Opportunities() {
   const {
     user,
     profile,
-    setProfile,
     viewOpportunity: onViewDetails,
     appSearchQuery: searchQuery,
-    setAppSearchQuery: setSearchQuery
+    setAppSearchQuery: setSearchQuery,
+    // Bookmark actions from centralized context — no local Firestore logic needed
+    toggleBookmark,
+    isBookmarked,
   } = useAppContext();
 
   const qVal = searchQuery;
@@ -93,21 +93,9 @@ export default function Opportunities() {
   };
 
   const handleToggleBookmark = async (id: string) => {
-    if (!profile?.uid) return;
-    const isBookmarked = profile.bookmarks?.includes(id);
-    try {
-      const userRef = doc(db, 'users', profile.uid);
-      if (isBookmarked) {
-        await updateDoc(userRef, { bookmarks: arrayRemove(id) });
-        setProfile({ ...profile, bookmarks: (profile.bookmarks || []).filter((b: string) => b !== id) });
-      } else {
-        await updateDoc(userRef, { bookmarks: arrayUnion(id) });
-        setProfile({ ...profile, bookmarks: [...(profile.bookmarks || []), id] });
-      }
-      trackInteraction(id, isBookmarked ? 'view' : 'save');
-    } catch (e) {
-      console.error(e);
-    }
+    // Delegates to the centralized toggleBookmark action in AppContext.
+    // Firestore update, optimistic state, and profile sync all happen there.
+    await toggleBookmark(id);
   };
 
   const filteredResults = React.useMemo(() => {
@@ -345,7 +333,7 @@ export default function Opportunities() {
                 opportunity={opp}
                 onViewDetails={onViewDetails}
                 onToggleBookmark={handleToggleBookmark}
-                isBookmarked={!!profile?.bookmarks?.includes(opp.id)}
+                isBookmarked={isBookmarked(opp.id)}
               />
             ))}
           </div>
