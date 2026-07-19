@@ -19,9 +19,14 @@ import jwt from "jsonwebtoken";
 import { ScholarshipSchema, AIEvaluationResponseSchema } from "./src/models/scholarshipSchema.js";
 import { isToxic, createToxicityMiddleware } from "./src/services/toxicity.js";
 import { authenticateUser, deleteFirebaseUser } from "./src/middleware/auth.js";
-import rateLimit from "express-rate-limit";
+import rateLimit, { MemoryStore } from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 import Redis from "ioredis";
+
+declare global {
+  var REDIS_AVAILABLE: boolean;
+}
+global.REDIS_AVAILABLE = false;
 import { v2 as cloudinary } from "cloudinary";
 import { meiliClient, initializeSearchSync } from "./src/services/searchSync.js";
 import { ExpressAdapter } from '@bull-board/express';
@@ -55,45 +60,62 @@ try {
       console.warn('[Redis] Connection failed or Redis is not running. Bypassing rate limiting (fail-open mode).');
       redisErrorLogged = true;
     }
+    global.REDIS_AVAILABLE = false;
   });
   redisClient.on('connect', () => {
     console.log('[Redis] Connected successfully');
     redisErrorLogged = false;
+    global.REDIS_AVAILABLE = true;
+  });
+  redisClient.on('end', () => {
+    global.REDIS_AVAILABLE = false;
   });
 } catch (e: any) {
   console.error('[Redis] Init error:', e.message);
+  global.REDIS_AVAILABLE = false;
 }
 
 const createFailOpenStore = (prefix: string) => {
-  const store = new RedisStore({
-    sendCommand: (...args: string[]) => {
-      const [command, ...commandArgs] = args;
-      return redisClient.call(command, ...commandArgs) as Promise<any>;
-    },
-    prefix: prefix,
-  });
+  const fallbackStore = new MemoryStore();
+  let store: any;
+  if (redisClient) {
+    store = new RedisStore({
+      sendCommand: (...args: string[]) => {
+        const [command, ...commandArgs] = args;
+        return redisClient.call(command, ...commandArgs) as Promise<any>;
+      },
+      prefix: prefix,
+    });
+  }
 
   return {
-    ...store,
+    ...fallbackStore,
     increment: async (key: string) => {
-      if (!redisClient || redisClient.status !== 'ready') {
-        console.error(`[RateLimit] Redis disconnected. Failing open for key: ${key}`);
-        return { totalHits: 1, resetTime: new Date(Date.now() + 60000) };
+      if (global.REDIS_AVAILABLE && store) {
+        try {
+          return await store.increment(key);
+        } catch (err: any) {
+          console.error(`[RateLimit] Redis error. Failing open for key: ${key}`);
+          global.REDIS_AVAILABLE = false;
+        }
       }
-      try {
-        return await store.increment(key);
-      } catch (err: any) {
-        console.error(`[RateLimit] Redis error. Failing open for key: ${key}`);
-        return { totalHits: 1, resetTime: new Date(Date.now() + 60000) };
-      }
+      return fallbackStore.increment(key);
     },
     decrement: async (key: string) => {
-      if (!redisClient || redisClient.status !== 'ready') return;
-      try { return await store.decrement(key); } catch(e) {}
+      if (global.REDIS_AVAILABLE && store) {
+        try { return await store.decrement(key); } catch(e) { global.REDIS_AVAILABLE = false; }
+      }
+      if (fallbackStore.decrement) {
+        return fallbackStore.decrement(key);
+      }
     },
     resetKey: async (key: string) => {
-      if (!redisClient || redisClient.status !== 'ready') return;
-      try { return await store.resetKey(key); } catch(e) {}
+      if (global.REDIS_AVAILABLE && store) {
+        try { return await store.resetKey(key); } catch(e) { global.REDIS_AVAILABLE = false; }
+      }
+      if (fallbackStore.resetKey) {
+        return fallbackStore.resetKey(key);
+      }
     },
   };
 };
@@ -616,14 +638,24 @@ async function startServer() {
   });
 
   if (redisClient) {
-    const pubClient = redisClient.duplicate();
-    const subClient = redisClient.duplicate();
-    
-    // Fallback if Redis fails so it doesn't crash the server
-    pubClient.on('error', (err) => console.warn('[Socket.io Redis Pub] Error:', err.message));
-    subClient.on('error', (err) => console.warn('[Socket.io Redis Sub] Error:', err.message));
-    
-    io.adapter(createAdapter(pubClient, subClient));
+    try {
+      const pubClient = redisClient.duplicate();
+      const subClient = redisClient.duplicate();
+      
+      // Fallback if Redis fails so it doesn't crash the server
+      pubClient.on('error', (err) => {
+        console.warn('[Socket.io Redis Pub] Error:', err.message);
+        global.REDIS_AVAILABLE = false;
+      });
+      subClient.on('error', (err) => {
+        console.warn('[Socket.io Redis Sub] Error:', err.message);
+        global.REDIS_AVAILABLE = false;
+      });
+      
+      io.adapter(createAdapter(pubClient, subClient));
+    } catch (e: any) {
+      console.warn('[Socket.io] Redis adapter setup failed, falling back to in-memory adapter:', e.message);
+    }
   }
 
   ioInstance = io;
