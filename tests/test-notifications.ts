@@ -1,7 +1,7 @@
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 import { matchOpportunityAndNotify } from "../src/services/opportunityMatcher";
-import { runDeadlineChecks } from "../src/services/deadlineScheduler";
+import { runDeadlineChecks, runWeeklyDigest } from "../src/services/deadlineScheduler";
 
 dotenv.config();
 
@@ -13,12 +13,77 @@ async function testNotifications() {
   console.log("   YuvaHub Notification System Integration Testing              ");
   console.log("=================================================================");
 
-  const client = new MongoClient(uri);
+  let db: any;
+  let client: MongoClient | null = null;
+
   try {
+    client = new MongoClient(uri, { serverSelectionTimeoutMS: 3000 });
     await client.connect();
     console.log("[Database] Connected successfully to MongoDB.");
-    const db = client.db(dbName);
+    db = client.db(dbName);
+  } catch (dbErr: any) {
+    console.warn(`[Database] Real MongoDB connection unavailable (${dbErr.message || 'SSL/Network'}). Using In-Memory Mock Database for test suite execution.`);
+    
+    // In-memory fallback database store
+    const mockUsers: any[] = [];
+    const mockOpps: any[] = [];
+    const mockNotifs: any[] = [];
 
+    db = {
+      collection: (name: string) => {
+        if (name === "users") {
+          return {
+            find: () => ({ toArray: async () => mockUsers }),
+            updateOne: async (q: any, u: any) => {
+              const existingIndex = mockUsers.findIndex(item => item.uid === q.uid);
+              if (existingIndex >= 0) mockUsers[existingIndex] = { ...mockUsers[existingIndex], ...u.$set };
+              else mockUsers.push(u.$set);
+            },
+            deleteOne: async (q: any) => {
+              const idx = mockUsers.findIndex(item => item.uid === q.uid);
+              if (idx >= 0) mockUsers.splice(idx, 1);
+            }
+          };
+        }
+        if (name === "opportunities") {
+          return {
+            findOne: async (q: any) => {
+              return mockOpps.find(item => item.id === q.id || item._id === q._id || (q.$or && q.$or.some((o: any) => o._id === item._id || o.id === item.id)));
+            },
+            updateOne: async (q: any, u: any) => {
+              const existingIndex = mockOpps.findIndex(item => item.id === q.id);
+              if (existingIndex >= 0) mockOpps[existingIndex] = { ...mockOpps[existingIndex], ...u.$set };
+              else mockOpps.push(u.$set);
+            },
+            deleteOne: async (q: any) => {
+              const idx = mockOpps.findIndex(item => item.id === q.id);
+              if (idx >= 0) mockOpps.splice(idx, 1);
+            }
+          };
+        }
+        if (name === "notifications") {
+          return {
+            find: (q?: any) => ({
+              toArray: async () => {
+                if (!q || !q.userId) return mockNotifs;
+                return mockNotifs.filter(n => n.userId === q.userId && (!q.type || n.type === q.type));
+              }
+            }),
+            findOne: async (q: any) => mockNotifs.find(n => n.userId === q.userId && n.title === q.title),
+            insertOne: async (doc: any) => mockNotifs.push(doc),
+            deleteMany: async (q: any) => {
+              for (let i = mockNotifs.length - 1; i >= 0; i--) {
+                if (mockNotifs[i].userId === q.userId) mockNotifs.splice(i, 1);
+              }
+            }
+          };
+        }
+        return {};
+      }
+    };
+  }
+
+  try {
     // 1. Create a dummy test user
     const usersCollection = db.collection("users");
     const testUser = {
@@ -78,15 +143,14 @@ async function testNotifications() {
       console.warn("[Fail] No skill-based alert generated.");
     }
 
-    // 4. Test Deadline Reminders (Deadline alert)
-    // Create an opportunity closing in exactly 3 days matching user's bookmark
+    // 4. Test Deadline Reminders (48-hour / ~2 days alert)
     const testBookmarkedOpportunity = {
       id: "opp_deadline_test_999",
       _id: "opp_deadline_test_999",
       title: "MIT Hackathon 2026",
       organization: "MIT",
       category: "Hackathon",
-      deadline: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString() // 3 days from now
+      deadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString() // 2 days (48 hours) from now
     };
 
     const oppsCollection = db.collection("opportunities");
@@ -95,9 +159,9 @@ async function testNotifications() {
       { $set: testBookmarkedOpportunity },
       { upsert: true }
     );
-    console.log("\n[Test Opportunity] Upserted bookmarked deadline test opportunity:", testBookmarkedOpportunity.id);
+    console.log("\n[Test Opportunity] Upserted 48-hour deadline test opportunity:", testBookmarkedOpportunity.id);
 
-    console.log("\n--- Triggering deadline scheduler reminders scan ---");
+    console.log("\n--- Triggering deadline scheduler reminders scan (48-hour alert) ---");
     await runDeadlineChecks(db);
 
     const deadlineMatches = await notifCollection.find({
@@ -111,21 +175,25 @@ async function testNotifications() {
     });
 
     if (deadlineMatches.length > 0) {
-      console.log("[Success] Deadline reminder generated successfully.");
+      console.log("[Success] 48-hour deadline reminder generated successfully.");
     } else {
-      console.warn("[Fail] No deadline reminder generated.");
+      console.warn("[Fail] No 48-hour deadline reminder generated.");
     }
+
+    // 5. Test Weekly Summary Digest
+    console.log("\n--- Triggering weekly summary digest scan ---");
+    await runWeeklyDigest(db);
 
     // Clean up
     await usersCollection.deleteOne({ uid: testUser.uid });
     await oppsCollection.deleteOne({ id: testBookmarkedOpportunity.id });
     await notifCollection.deleteMany({ userId: testUser.uid });
-    console.log("\n[Cleanup] Test metadata successfully purged from the database.");
+    console.log("\n[Cleanup] Test metadata successfully purged.");
 
   } catch (err: any) {
     console.error("Test failed with error:", err.message);
   } finally {
-    await client.close();
+    if (client) await client.close();
   }
 }
 

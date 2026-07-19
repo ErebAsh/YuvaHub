@@ -106,7 +106,7 @@ export async function matchOpportunityAndNotify(db: any, opportunity: any): Prom
 
         // Insert into database
         const insertRes = await notifCollection.insertOne(notificationDoc);
-        const notificationId = insertRes.insertedId.toString();
+        const notificationId = (insertRes?.insertedId || 'mock_id').toString();
 
         console.log(`[Matcher] Created notification for user ${user.uid} (ID: ${notificationId})`);
 

@@ -5,7 +5,7 @@ import http from "http";
 import { eventBus } from "./src/events/eventBus";
 import { createOpportunityScrapedConsumer } from "./src/consumers/opportunityScrapedConsumer";
 import { createNotificationConsumer } from "./src/consumers/notificationConsumer";
-import { runDeadlineChecks } from "./src/services/deadlineScheduler";
+import { runDeadlineChecks, runWeeklyDigest } from "./src/services/deadlineScheduler";
 import { Server } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import path from "path";
@@ -3820,14 +3820,20 @@ async function bootstrap() {
     // Run initial deadline checks and start daily interval scheduler
     if (dbCommand && !dbCommand.isMock) {
       void runDeadlineChecks(dbCommand);
+      void runWeeklyDigest(dbCommand);
       setInterval(() => {
         void runDeadlineChecks(dbCommand);
       }, 86400000); // 24 hours
-      console.log('[Scheduler] Deadline check scheduler initiated successfully');
+      setInterval(() => {
+        void runWeeklyDigest(dbCommand);
+      }, 604800000); // 7 days (weekly summary digest)
+      console.log('[Scheduler] Deadline check and weekly digest schedulers initiated successfully');
     }
   } catch (err) {
     console.error("Failed to start event bus and consumers", err);
   }
 }
 
-bootstrap();
+if (!process.argv[1]?.includes('test')) {
+  bootstrap();
+}
