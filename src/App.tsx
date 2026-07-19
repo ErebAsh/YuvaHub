@@ -173,6 +173,17 @@ function App() {
     };
   }, [setActiveTab, setAppSearchQuery]);
 
+  const adminEmails = (import.meta.env.VITE_ADMIN_EMAILS || '')
+    .split(',')
+    .map((e: string) => e.trim().toLowerCase())
+    .filter(Boolean);
+  const isAdminUser = Boolean(
+    user?.role === 'admin' || 
+    user?.isAdmin || 
+    (user?.email && adminEmails.includes(user.email.toLowerCase())) || 
+    (import.meta.env.DEV && user?.email)
+  );
+
   const TABS = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'opportunities', label: 'Opportunities', icon: Globe },
@@ -183,7 +194,7 @@ function App() {
     { id: 'community', label: 'Community', icon: MessageSquare },
     { id: 'profile', label: 'My Profile', icon: User },
     { id: 'settings', label: 'Settings', icon: Settings },
-    ...(user?.email === 'uditt490@gmail.com' ? [{ id: 'admin', label: 'Admin', icon: Activity }] : []),
+    ...(isAdminUser ? [{ id: 'admin', label: 'Admin', icon: Activity }] : []),
   ];
 
   const renderContent = () => {
