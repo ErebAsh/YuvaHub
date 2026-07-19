@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { initializeApp, cert } from 'firebase-admin';
+import { initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 
 let isFirebaseInitialized = false;

@@ -41,11 +41,14 @@ cloudinary.config({
 
 let redisClient: Redis;
 try {
-  redisClient = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+  redisClient = new Redis(process.env.REDIS_URL || "redis://127.0.0.1:6379", {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
+    enableOfflineQueue: false,
+    family: 4,
     retryStrategy: (times) => {
-      return Math.min(times * 50, 2000);
+      if (times > 3) return null;
+      return 200;
     }
   });
 
@@ -616,14 +619,16 @@ async function startServer() {
   });
 
   if (redisClient) {
-    const pubClient = redisClient.duplicate();
-    const subClient = redisClient.duplicate();
-    
-    // Fallback if Redis fails so it doesn't crash the server
-    pubClient.on('error', (err) => console.warn('[Socket.io Redis Pub] Error:', err.message));
-    subClient.on('error', (err) => console.warn('[Socket.io Redis Sub] Error:', err.message));
-    
-    io.adapter(createAdapter(pubClient, subClient));
+    redisClient.on('ready', () => {
+      try {
+        const pubClient = redisClient.duplicate();
+        const subClient = redisClient.duplicate();
+        io.adapter(createAdapter(pubClient, subClient));
+        console.log('[Socket.io Redis] Adapter attached successfully');
+      } catch (e: any) {
+        console.warn('[Socket.io Redis] Failed to attach adapter:', e.message);
+      }
+    });
   }
 
   ioInstance = io;

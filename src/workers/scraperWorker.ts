@@ -91,3 +91,11 @@ scraperWorker.on("failed", (job, err) => {
     // TODO: Publish to emailQueue to alert admin
   }
 });
+
+let scraperWorkerErrorLogged = false;
+scraperWorker.on("error", (err) => {
+  if (!scraperWorkerErrorLogged) {
+    console.warn('[ScraperWorker] Redis connection offline. Worker listening paused.');
+    scraperWorkerErrorLogged = true;
+  }
+});
