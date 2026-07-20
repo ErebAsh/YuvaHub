@@ -6,6 +6,7 @@
 import { auth } from '../lib/firebase';
 import * as geminiService from './gemini';
 import { getFilteredFallbacks } from './staticFallbacks';
+import { generateCacheKey } from '../utils/cacheUtils.js';
 
 const API_BASE_URL = "/api/v1";
 
@@ -152,7 +153,7 @@ export async function fetchLatestFeed() {
 }
 
 export async function fetchSmartFeed(profile: any, cursor?: string) {
-  const cacheKey = "smart_feed";
+  const cacheKey = generateCacheKey('smart_feed', { ...profile, cursor });
   try {
     const searchParams = new URLSearchParams();
     if (cursor) searchParams.append('cursor', cursor);
@@ -296,7 +297,7 @@ export async function chatWithAIMentorBackend(messages: any[], newMessage: strin
 }
 
 export async function fetchExploreFeed(cursor?: string, limit: number = 20) {
-  const cacheKey = "explore_feed";
+  const cacheKey = generateCacheKey('explore_feed', { cursor, limit });
   try {
     const searchParams = new URLSearchParams();
     if (cursor) searchParams.append('cursor', cursor);
@@ -377,7 +378,7 @@ export async function searchOpportunities(
   }, 
   cursor?: string
 ) {
-  const cacheKey = `search_${query.toLowerCase().replace(/\s+/g, '_')}_${JSON.stringify(filters || {})}`;
+  const cacheKey = generateCacheKey('search', { query: query.toLowerCase().trim(), ...filters, cursor });
   try {
     const searchParams = new URLSearchParams();
     searchParams.append('q', query);

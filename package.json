@@ -23,6 +23,7 @@
     "test-eventbus": "tsx tests/test-eventbus.ts",
     "test-admin-alerts": "tsx tests/test-admin-alerts.ts"
     "test-eventbus": "tsx tests/test-eventbus.ts"
+    "test-cache-keys": "tsx tests/test-cache-keys.ts"
   },
   "dependencies": {
     "@bull-board/api": "^8.1.2",
