@@ -23,6 +23,7 @@ import rateLimit from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 import Redis from "ioredis";
 import { v2 as cloudinary } from "cloudinary";
+import multer from "multer";
 import { meiliClient, initializeSearchSync } from "./src/services/searchSync.js";
 import { ExpressAdapter } from '@bull-board/express';
 import { createBullBoard } from '@bull-board/api';
@@ -492,8 +493,8 @@ if (commandUri && queryUri) {
     dbQuery.collection("users").createIndex({ uid: 1 }, { unique: true })
       .then(() => console.log(`[Database] Created unique index on users.uid`))
       .catch((err: any) => console.error(`[Database] Failed to create index on users.uid:`, err));
-    dbCommand.collection("users").createIndex({ firebaseUid: 1 }, { unique: true })
-      .then(() => console.log(`[Database] Created unique index on users.firebaseUid`))
+    dbCommand.collection("users").createIndex({ firebaseUid: 1 }, { unique: true, sparse: true })
+      .then(() => console.log(`[Database] Created unique sparse index on users.firebaseUid`))
       .catch((err: any) => console.error(`[Database] Failed to create unique index:`, err));
   }).catch(err => {
     console.error("[Database] Connection failed, falling back to Mock Data:", err);
@@ -621,8 +622,8 @@ async function startServer() {
   if (redisClient) {
     redisClient.on('ready', () => {
       try {
-        const pubClient = redisClient.duplicate();
-        const subClient = redisClient.duplicate();
+        const pubClient = redisClient.duplicate({ enableOfflineQueue: true });
+        const subClient = redisClient.duplicate({ enableOfflineQueue: true });
         io.adapter(createAdapter(pubClient, subClient));
         console.log('[Socket.io Redis] Adapter attached successfully');
       } catch (e: any) {
@@ -1731,6 +1732,17 @@ ${urls.join("\n")}
 
       const apiSecret = process.env.CLOUDINARY_API_SECRET || "";
       if (!apiSecret) {
+        if (process.env.NODE_ENV !== "production") {
+          return res.json({
+            signature: "dummy_signature",
+            timestamp,
+            folder,
+            allowed_formats: paramsToSign.allowed_formats,
+            apiKey: "dummy_key",
+            cloudName: "dummy_cloud",
+            isDummy: true
+          });
+        }
         return res.status(500).json({ error: "Cloudinary API Secret not configured." });
       }
 
@@ -1812,6 +1824,36 @@ ${urls.join("\n")}
   app.post("/api/v1/storage/signature", handleSignatureRequest);
   app.post("/api/storage/save", handleSaveUpload);
   app.post("/api/v1/storage/save", handleSaveUpload);
+
+  const localUpload = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => {
+        const dir = path.join(process.cwd(), "public", "uploads");
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+      },
+      filename: (req, file, cb) => {
+        cb(null, `${Date.now()}-${file.originalname}`);
+      }
+    })
+  });
+
+  const handleLocalUpload = async (req: any, res: any) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+      const publicUrl = `/uploads/${req.file.filename}`;
+      res.json({
+        secure_url: publicUrl,
+        public_id: req.file.filename,
+        format: path.extname(req.file.filename).replace('.', '')
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to handle local upload" });
+    }
+  };
+
+  app.post("/api/storage/upload-local", localUpload.single("file"), handleLocalUpload);
+  app.post("/api/v1/storage/upload-local", localUpload.single("file"), handleLocalUpload);
 
   app.post("/api/v1/interactions/track", async (req, res) => {
     try {
