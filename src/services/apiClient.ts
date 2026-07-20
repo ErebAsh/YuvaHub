@@ -5,7 +5,7 @@
 
 import { auth } from '../lib/firebase';
 import * as geminiService from './gemini';
-import { getFilteredFallbacks } from './staticFallbacks';
+import { getFilteredFallbacks, CURATED_FALLBACKS } from './staticFallbacks';
 import { generateCacheKey } from '../utils/cacheUtils.js';
 
 const API_BASE_URL = "/api/v1";
@@ -554,6 +554,11 @@ export async function trackInteraction(opportunityId: string, actionType: 'view'
 }
 
 export async function fetchOpportunityById(id: string) {
+  if (id.startsWith("fb_")) {
+    const fallback = CURATED_FALLBACKS.find(fb => fb.id === id);
+    if (fallback) return fallback;
+  }
+
   try {
     const url = `${API_BASE_URL}/opportunity/${id}`;
     const response = await fetchWithRetry(url, {
