@@ -52,46 +52,83 @@ export default function Profile() {
     try {
       const token = await user.getIdToken();
       
-      // Step 1: Get signature from backend
-      const sigRes = await fetch('/api/storage/signature', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ fileType: type, extension: fileExt })
-      });
+      let uploadData;
 
-      if (!sigRes.ok) {
-        const errorData = await sigRes.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to generate upload signature");
+      try {
+        // Step 1: Get signature from backend
+        const sigRes = await fetch('/api/storage/signature', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ fileType: type, extension: fileExt })
+        });
+
+        if (!sigRes.ok) {
+          throw new Error("Failed to generate upload signature");
+        }
+
+        const sigData = await sigRes.json();
+
+        if (sigData.isDummy) {
+          throw new Error("Cloudinary not configured on backend");
+        }
+
+        // Step 2: Upload directly to Cloudinary
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', file);
+        uploadFormData.append('api_key', sigData.apiKey);
+        uploadFormData.append('timestamp', sigData.timestamp.toString());
+        uploadFormData.append('signature', sigData.signature);
+        uploadFormData.append('folder', sigData.folder);
+        if (sigData.allowed_formats) {
+          uploadFormData.append('allowed_formats', sigData.allowed_formats);
+        }
+
+        const uploadUrl = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/auto/upload`;
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'POST',
+          body: uploadFormData
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error("Cloudinary upload failed");
+        }
+
+        uploadData = await uploadRes.json();
+      } catch (err: any) {
+        console.warn("Cloudinary upload failed, attempting fallback.", err);
+        
+        if (import.meta.env.MODE === 'development') {
+          console.log("Development mode: using local file upload fallback");
+          const localFormData = new FormData();
+          localFormData.append('file', file);
+          const localUploadRes = await fetch('/api/storage/upload-local', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            },
+            body: localFormData
+          });
+          
+          if (!localUploadRes.ok) {
+            throw new Error("Local fallback upload failed");
+          }
+          uploadData = await localUploadRes.json();
+        } else {
+          if (type === 'avatar') {
+            const fallbackSeed = user?.displayName || user?.email || 'user';
+            uploadData = {
+              secure_url: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(fallbackSeed)}`,
+              public_id: `fallback_${Date.now()}`
+            };
+            console.warn("Using DiceBear fallback avatar due to upload failure.");
+          } else {
+            throw new Error("File upload service is currently unavailable. Please try again later.");
+          }
+        }
       }
-
-      const sigData = await sigRes.json();
-
-      // Step 2: Upload directly to Cloudinary
-      const uploadFormData = new FormData();
-      uploadFormData.append('file', file);
-      uploadFormData.append('api_key', sigData.apiKey);
-      uploadFormData.append('timestamp', sigData.timestamp.toString());
-      uploadFormData.append('signature', sigData.signature);
-      uploadFormData.append('folder', sigData.folder);
-      if (sigData.allowed_formats) {
-        uploadFormData.append('allowed_formats', sigData.allowed_formats);
-      }
-
-      const uploadUrl = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/auto/upload`;
-      const uploadRes = await fetch(uploadUrl, {
-        method: 'POST',
-        body: uploadFormData
-      });
-
-      if (!uploadRes.ok) {
-        const uploadError = await uploadRes.json().catch(() => ({}));
-        throw new Error(uploadError.error?.message || "Cloudinary upload failed");
-      }
-
-      const uploadData = await uploadRes.json();
 
       // Step 3: Save metadata to MongoDB
       const saveRes = await fetch('/api/storage/save', {
