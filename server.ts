@@ -111,7 +111,7 @@ const createFailOpenStore = (prefix: string) => {
     },
     decrement: async (key: string) => {
       if (global.REDIS_AVAILABLE && store) {
-        try { return await store.decrement(key); } catch(e) { global.REDIS_AVAILABLE = false; }
+        try { return await store.decrement(key); } catch (e) { global.REDIS_AVAILABLE = false; }
       }
       if (fallbackStore.decrement) {
         return fallbackStore.decrement(key);
@@ -119,7 +119,7 @@ const createFailOpenStore = (prefix: string) => {
     },
     resetKey: async (key: string) => {
       if (global.REDIS_AVAILABLE && store) {
-        try { return await store.resetKey(key); } catch(e) { global.REDIS_AVAILABLE = false; }
+        try { return await store.resetKey(key); } catch (e) { global.REDIS_AVAILABLE = false; }
       }
       if (fallbackStore.resetKey) {
         return fallbackStore.resetKey(key);
@@ -155,8 +155,8 @@ let _genAI: GoogleGenAI | null = null;
 function getGenAI() {
   if (!_genAI) {
     if (!process.env.GEMINI_API_KEY) {
-       console.warn("GEMINI_API_KEY not set. AI features will fallback.");
-       return null;
+      console.warn("GEMINI_API_KEY not set. AI features will fallback.");
+      return null;
     }
     _genAI = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
@@ -189,7 +189,7 @@ async function getRankedOpportunities(database: any, profile: any, page: number,
         ]
       }).sort({ created_at: -1 }).limit(150);
       const opportunities = await cursor.toArray();
-      
+
       if (opportunities.length === 0) {
         return { items: [], next_page: null };
       }
@@ -273,7 +273,7 @@ async function getRankedOpportunities(database: any, profile: any, page: number,
       scoredItems.sort((a: any, b: any) => b.metrics.totalScore - a.metrics.totalScore);
 
       const paginatedItems = scoredItems.slice(skip, skip + limit);
-      
+
       const mapped = paginatedItems.map((opp: any) => {
         const copy = { ...opp };
         delete copy._id;
@@ -508,7 +508,7 @@ class MemoryCollection {
 class MockDB {
   isMock = true;
   collections: Record<string, MemoryCollection> = {
-    opportunities: new MemoryCollection(CURATED_FALLBACKS.map(f => ({...f, created_at: new Date()}))),
+    opportunities: new MemoryCollection(CURATED_FALLBACKS.map(f => ({ ...f, created_at: new Date() }))),
     interactions: new MemoryCollection(),
     scraper_metrics: new MemoryCollection()
   };
@@ -530,14 +530,14 @@ function setupDNL(database: any) {
 if (commandUri && queryUri) {
   const commandClient = new MongoClient(commandUri);
   const queryClient = new MongoClient(queryUri);
-  
+
   Promise.all([commandClient.connect(), queryClient.connect()]).then(() => {
     dbCommand = commandClient.db(process.env.MONGODB_COMMAND_DB || dbName);
     dbQuery = queryClient.db(process.env.MONGODB_QUERY_DB || dbName);
     console.log(`[Database] Connected to Command and Query MongoDB pools`);
     setupDNL(dbCommand);
     initializeSearchSync(dbQuery);
-    
+
     dbCommand.collection("opportunities").createIndex({ created_at: -1, source_quality_score: -1 })
       .then(() => console.log(`[Database] Created compound index on opportunities`))
       .catch((err: any) => console.error(`[Database] Failed to create index:`, err));
@@ -659,11 +659,11 @@ async function startServer() {
   let viteInstance: any = null;
   const app = express();
   const server = http.createServer(app);
-  
+
   const frontendUrl = process.env.FRONTEND_URL;
   const corsOptions = frontendUrl ? { origin: frontendUrl } : { origin: "*" };
-  
-  const io = new Server(server, { 
+
+  const io = new Server(server, {
     cors: corsOptions,
     connectionStateRecovery: {
       maxDisconnectionDuration: 2 * 60 * 1000,
@@ -676,7 +676,7 @@ async function startServer() {
       try {
         const pubClient = redisClient.duplicate({ enableOfflineQueue: true });
         const subClient = redisClient.duplicate({ enableOfflineQueue: true });
-        
+
         // Fallback if Redis fails so it doesn't crash the server
         pubClient.on('error', (err) => {
           console.warn('[Socket.io Redis Pub] Error:', err.message);
@@ -745,7 +745,7 @@ async function startServer() {
       return res.status(400).json({ error: "eventName is required" });
     }
     console.log(`[REST Backup] Received fallback event: ${eventName}`, data);
-    
+
     // Broadcast or process the event if the local socket instance is available
     if (ioInstance) {
       ioInstance.emit(eventName, data);
@@ -757,7 +757,7 @@ async function startServer() {
     try {
       const { jobUrl } = req.body;
       const userId = (req as any).user?.uid;
-      
+
       if (!jobUrl) {
         return res.status(400).json({ error: "jobUrl is required" });
       }
@@ -768,7 +768,7 @@ async function startServer() {
         action: "fill_application"
       });
 
-  res.status(200).json({ success: true, jobId: job.id, message: "Agent job queued" });
+      res.status(200).json({ success: true, jobId: job.id, message: "Agent job queued" });
     } catch (e: any) {
       console.error("Error triggering agent:", e);
       res.status(500).json({ error: "Failed to trigger agent" });
@@ -821,14 +821,14 @@ async function startServer() {
     try {
       const baseUrl = process.env.APP_URL || "https://yuvahub.xyz";
       const currentUrl = `${baseUrl}${req.originalUrl}`;
-      
+
       let title = "YuvaHub | Student Opportunity Platform (Hackathons, Scholarships, Mentorships)";
       let description = "YuvaHub is India's leading discovery platform for students. Find life-changing hackathons, scholarships, and mentorships to accelerate your tech career. AI-powered matching for your skills.";
       let image = `${baseUrl}/og-image.jpg`;
       let schemaData: any = null;
 
       const pathName = req.path.toLowerCase();
-      
+
       if (pathName.startsWith("/opportunity/")) {
         const parts = req.path.split("/");
         const id = parts[2];
@@ -839,7 +839,7 @@ async function startServer() {
               let query;
               try {
                 query = { _id: new ObjectId(id) };
-              } catch(e) {
+              } catch (e) {
                 query = { id: id };
               }
               opp = await dbQuery.collection("opportunities").findOne(query);
@@ -847,7 +847,7 @@ async function startServer() {
               console.error("Error retrieving opportunity for SEO:", dbErr);
             }
           }
-          
+
           if (!opp) {
             opp = CURATED_FALLBACKS.find(f => f.id === id);
           }
@@ -860,9 +860,9 @@ async function startServer() {
             if (opp.orgLogo) {
               image = opp.orgLogo;
             }
-            
+
             const isJob = opp.category?.toLowerCase().includes('job') || opp.category?.toLowerCase().includes('internship') || opp.type?.toLowerCase().includes('job') || opp.type?.toLowerCase().includes('internship');
-            
+
             if (isJob) {
               schemaData = {
                 "@context": "https://schema.org",
@@ -1283,7 +1283,7 @@ ${urls.join("\n")}
   };
 
   // --- Real API Routes ---
-  
+
   const adminRouter = express.Router();
   adminRouter.use(authenticateUser(dbCommand), authorizeRoles('admin', 'moderator'));
 
@@ -1305,7 +1305,7 @@ ${urls.join("\n")}
       const activeUsers = await db.collection("users").countDocuments();
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const opportunitiesAdded = await db.collection("opportunities").countDocuments({ created_at: { $gte: oneDayAgo } });
-      
+
       res.json({
         activeUsers: activeUsers || 1540,
         opportunitiesAdded: opportunitiesAdded || 128,
@@ -1315,7 +1315,7 @@ ${urls.join("\n")}
         totalExecutions: 342,
         failedExecutions: 2
       });
-    } catch(err) {
+    } catch (err) {
       res.status(500).json({ error: "Internal Server Error" });
     }
   });
@@ -1325,13 +1325,13 @@ ${urls.join("\n")}
       const active = await scraperQueue.getActiveCount();
       const waiting = await scraperQueue.getWaitingCount();
       const failed = await scraperQueue.getFailedCount();
-      
+
       res.json([
         { name: 'Devpost Scraper', status: failed > 0 ? 'degraded' : 'healthy', lastRun: 'Recently', items: active + waiting + 42, failures: failed, proxyHealth: 'green' },
         { name: 'Internshala Scraper', status: 'healthy', lastRun: 'Recently', items: 18, failures: 0, proxyHealth: 'green' },
         { name: 'BullMQ Queue', status: failed > 0 ? 'failing' : 'healthy', lastRun: 'Live', items: waiting, failures: failed, proxyHealth: 'green' }
       ]);
-    } catch(err) {
+    } catch (err) {
       res.status(500).json({ error: "Internal Server Error" });
     }
   });
@@ -1360,7 +1360,7 @@ ${urls.join("\n")}
       let query;
       try {
         query = { _id: new ObjectId(req.params.id) };
-      } catch(e) {
+      } catch (e) {
         query = { id: req.params.id };
       }
       if (action === 'approve') {
@@ -1378,18 +1378,20 @@ ${urls.join("\n")}
     const { source_name } = req.body;
     try {
       await scraperQueue.add(`manual-scrape-${source_name}`, { source: source_name, manual: true });
-      res.json({ success: true, log: {
-        id: Date.now().toString(),
-        sourceName: source_name,
-        status: 'success',
-        startTime: new Date().toISOString(),
-        endTime: new Date().toISOString(),
-        durationMs: 0,
-        opportunitiesAdded: 0,
-        statusCode: 200,
-        errorMessage: null,
-        stackTrace: null
-      }});
+      res.json({
+        success: true, log: {
+          id: Date.now().toString(),
+          sourceName: source_name,
+          status: 'success',
+          startTime: new Date().toISOString(),
+          endTime: new Date().toISOString(),
+          durationMs: 0,
+          opportunitiesAdded: 0,
+          statusCode: 200,
+          errorMessage: null,
+          stackTrace: null
+        }
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1406,19 +1408,19 @@ ${urls.join("\n")}
   app.delete("/api/v1/user/account", authenticateUser(dbCommand), async (req, res) => {
     try {
       const uid = req.user.uid;
-      
+
       // 1. Delete from Firebase Auth
       await deleteFirebaseUser(uid);
-      
+
       // 2. Delete from MongoDB
       if (dbCommand) {
         await dbCommand.collection("users").deleteOne({ firebaseUid: uid });
-        
+
         // Also clean up any associated data
         await dbCommand.collection("interactions").deleteMany({ firebaseUid: uid });
         // Add more cleanup as needed (e.g. saved opportunities, profiles, etc.)
       }
-      
+
       res.json({ status: "success", message: "Account completely deleted" });
     } catch (err: any) {
       console.error("[Auth] Error deleting user account:", err);
@@ -1434,11 +1436,13 @@ ${urls.join("\n")}
         if (!isNaN(cInt) && cInt > 0) page = cInt;
       }
       const limit = parseInt((req.query.limit as string) || "10", 10);
-      
+
       if (!dbCommand || !dbQuery) {
-        return res.json({ num_results: 1, next_page: null, next_cursor: null, items: [{
-          id: "sys_nodeDbMissing", title: "Awaiting Live Ingestion...", organization: "Yuvahub System", type: "status", tags: ["system"], apply_link: "#"
-        }]});
+        return res.json({
+          num_results: 1, next_page: null, next_cursor: null, items: [{
+            id: "sys_nodeDbMissing", title: "Awaiting Live Ingestion...", organization: "Yuvahub System", type: "status", tags: ["system"], apply_link: "#"
+          }]
+        });
       }
 
       const profile = {
@@ -1455,7 +1459,7 @@ ${urls.join("\n")}
         next_cursor: result.next_page ? String(result.next_page) : null,
         items: result.items
       });
-    } catch(err) {
+    } catch (err) {
       console.error("/api/v1/opportunities error:", err);
       res.status(500).json({ error: "Internal Server Error" });
     }
@@ -1476,7 +1480,7 @@ ${urls.join("\n")}
         next_cursor: null,
         items: result.items
       });
-    } catch(err) {
+    } catch (err) {
       res.status(500).json({ error: "Internal Server Error" });
     }
   });
@@ -1494,7 +1498,7 @@ ${urls.join("\n")}
       }
 
       if (!dbQuery) {
-         return res.json({ num_results: 0, items: [] });
+        return res.json({ num_results: 0, items: [] });
       }
 
       const allOps = await dbQuery.collection("opportunities").find({ embedding: { $exists: true } }).toArray();
@@ -1539,10 +1543,10 @@ ${urls.join("\n")}
 
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const now = new Date();
-      
+
       // Check if created_at is stored as Date, or if there's no results, fallback to latest overall
       const cursor = dbQuery.collection("opportunities")
-        .find({ 
+        .find({
           created_at: { $gte: twentyFourHoursAgo },
           $or: [
             { endDate: { $gte: now } },
@@ -1557,22 +1561,22 @@ ${urls.join("\n")}
         .limit(20);
 
       const items = await cursor.toArray();
-      
+
       if (items.length === 0) {
         // Fallback to latest 10 overall if no recents
         const fallbackCursor = dbQuery.collection("opportunities")
-            .find({
-              $or: [
-                { endDate: { $gte: now } },
-                { startDate: { $gte: now } },
-                { deadlineDate: { $gte: now } },
-                { deadline: { $regex: "days left|weeks left|rolling|active|open", $options: "i" } },
-                { deadline: { $not: /closed|expired/i } },
-                { endDate: { $exists: false }, startDate: { $exists: false }, deadlineDate: { $exists: false }, deadline: { $exists: false } }
-              ]
-            })
-            .sort({ created_at: -1 })
-            .limit(10);
+          .find({
+            $or: [
+              { endDate: { $gte: now } },
+              { startDate: { $gte: now } },
+              { deadlineDate: { $gte: now } },
+              { deadline: { $regex: "days left|weeks left|rolling|active|open", $options: "i" } },
+              { deadline: { $not: /closed|expired/i } },
+              { endDate: { $exists: false }, startDate: { $exists: false }, deadlineDate: { $exists: false }, deadline: { $exists: false } }
+            ]
+          })
+          .sort({ created_at: -1 })
+          .limit(10);
         const fallbackItems = await fallbackCursor.toArray();
         return res.json({ num_results: fallbackItems.length, items: fallbackItems, fallback: true });
       }
@@ -1581,7 +1585,7 @@ ${urls.join("\n")}
         num_results: items.length,
         items
       });
-    } catch(err) {
+    } catch (err) {
       console.error("/api/v1/opportunities/latest error:", err);
       res.status(500).json({ error: "Internal Server Error" });
     }
@@ -1783,7 +1787,7 @@ ${urls.join("\n")}
 
       const payload = req.body;
       const { randomUUID } = await import("crypto");
-      
+
       const doc = {
         title: payload.title,
         description: payload.description,
@@ -1893,7 +1897,7 @@ ${urls.join("\n")}
       if (!dbQuery) return res.status(503).json({ error: "Database not available" });
       const txs = await dbQuery.collection("transactions").find({ userId: user.uid }).toArray();
       let balance = txs.reduce((acc: number, tx: any) => acc + (tx.amount || 0), 0);
-      
+
       if (balance === 0 && process.env.NODE_ENV === "development") {
         if (dbCommand) {
           await dbCommand.collection("transactions").insertOne({
@@ -1905,9 +1909,9 @@ ${urls.join("\n")}
           balance = 1000;
         }
       }
-      
+
       res.json({ balance });
-    } catch(err: any) {
+    } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
@@ -1921,7 +1925,7 @@ ${urls.join("\n")}
       if (type === 'daily_login') amount = 10;
       else if (type === 'profile_setup') amount = 50;
       else if (type === 'expired_report') amount = 5;
-      
+
       if (amount > 0) {
         if (type === 'daily_login') {
           const startOfDay = new Date();
@@ -1933,7 +1937,7 @@ ${urls.join("\n")}
           });
           if (existing) return res.status(400).json({ error: "Daily login already claimed" });
         }
-        
+
         await dbCommand.collection("transactions").insertOne({
           userId: user.uid,
           amount,
@@ -1943,7 +1947,7 @@ ${urls.join("\n")}
         });
       }
       res.json({ success: true, awarded: amount });
-    } catch(err: any) {
+    } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
@@ -1954,7 +1958,7 @@ ${urls.join("\n")}
       if (!dbQuery) return res.status(503).json({ error: "Database not available" });
       const bounties = await dbQuery.collection("bounties").find({ status: { $in: ['open', 'accepted'] } }).sort({ createdAt: -1 }).limit(100).toArray();
       res.json({ items: bounties.map((b: any) => ({ ...b, id: b._id.toString() })) });
-    } catch(err: any) {
+    } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
@@ -1964,18 +1968,18 @@ ${urls.join("\n")}
       const user = await getAuthenticatedUser(req);
       if (!dbCommand) return res.status(503).json({ error: "Database not available" });
       const { title, description, tags, reward, posterName } = req.body;
-      
+
       const txs = await dbCommand.collection("transactions").find({ userId: user.uid }).toArray();
       const balance = txs.reduce((acc: number, tx: any) => acc + (tx.amount || 0), 0);
       if (balance < reward) return res.status(400).json({ error: "Insufficient karma" });
-      
+
       await dbCommand.collection("transactions").insertOne({
         userId: user.uid,
         amount: -reward,
         type: 'bounty_post',
         timestamp: Date.now()
       });
-      
+
       const bounty = {
         title, description, tags, reward,
         status: 'open',
@@ -1986,7 +1990,7 @@ ${urls.join("\n")}
       };
       const result = await dbCommand.collection("bounties").insertOne(bounty);
       res.json({ success: true, bounty: { ...bounty, id: result.insertedId.toString() } });
-    } catch(err: any) {
+    } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
@@ -1997,14 +2001,14 @@ ${urls.join("\n")}
       if (!dbCommand) return res.status(503).json({ error: "Database not available" });
       const { ObjectId } = await import("mongodb");
       const { mentorName } = req.body;
-      
+
       const result = await dbCommand.collection("bounties").updateOne(
         { _id: new ObjectId(req.params.id), status: 'open' },
         { $set: { status: 'accepted', mentorId: user.uid, mentorName, updatedAt: Date.now() } }
       );
       if (result.modifiedCount === 0) return res.status(400).json({ error: "Bounty not available" });
       res.json({ success: true });
-    } catch(err: any) {
+    } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
@@ -2014,16 +2018,16 @@ ${urls.join("\n")}
       const user = await getAuthenticatedUser(req);
       if (!dbCommand) return res.status(503).json({ error: "Database not available" });
       const { ObjectId } = await import("mongodb");
-      
+
       const bounty = await dbCommand.collection("bounties").findOne({ _id: new ObjectId(req.params.id) });
       if (!bounty) return res.status(404).json({ error: "Not found" });
       if (bounty.posterId !== user.uid) return res.status(403).json({ error: "Only poster can resolve" });
-      
+
       await dbCommand.collection("bounties").updateOne(
         { _id: new ObjectId(req.params.id) },
         { $set: { status: 'resolved', updatedAt: Date.now() } }
       );
-      
+
       await dbCommand.collection("transactions").insertOne({
         userId: bounty.mentorId,
         amount: bounty.reward,
@@ -2031,9 +2035,9 @@ ${urls.join("\n")}
         timestamp: Date.now(),
         metadata: { bountyId: req.params.id }
       });
-      
+
       res.json({ success: true });
-    } catch(err: any) {
+    } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
@@ -2044,19 +2048,19 @@ ${urls.join("\n")}
       if (!dbCommand) return res.status(503).json({ error: "Database not available" });
       const { ObjectId } = await import("mongodb");
       const { rating } = req.body;
-      
+
       const bounty = await dbCommand.collection("bounties").findOne({ _id: new ObjectId(req.params.id) });
       if (!bounty) return res.status(404).json({ error: "Not found" });
       if (bounty.posterId !== user.uid) return res.status(403).json({ error: "Only poster can rate" });
-      
+
       const usersCol = dbCommand.collection("users");
       await usersCol.updateOne(
         { uid: bounty.mentorId },
         { $inc: { reputation: rating, bountiesResolved: 1 } }
       );
-      
+
       res.json({ success: true });
-    } catch(err: any) {
+    } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
@@ -2069,15 +2073,17 @@ ${urls.join("\n")}
         .sort({ reputation: -1 })
         .limit(10)
         .toArray();
-        
-      res.json({ items: topUsers.map((u: any) => ({
-        userId: u.uid,
-        name: u.name,
-        avatarUrl: u.avatarUrl,
-        reputation: u.reputation || 0,
-        bountiesResolved: u.bountiesResolved || 0
-      }))});
-    } catch(err: any) {
+
+      res.json({
+        items: topUsers.map((u: any) => ({
+          userId: u.uid,
+          name: u.name,
+          avatarUrl: u.avatarUrl,
+          reputation: u.reputation || 0,
+          bountiesResolved: u.bountiesResolved || 0
+        }))
+      });
+    } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
@@ -2167,7 +2173,7 @@ ${urls.join("\n")}
       try {
         const user = await getAuthenticatedUser(req);
         req.user = user;
-        
+
         if (!allowedRoles.includes(user.role)) {
           console.warn(`[Circuit Breaker] Forbidden access attempt to ${req.originalUrl} from IP ${req.ip}. Role: ${user.role}`);
           return res.status(403).json({ error: "Forbidden: Insufficient privileges." });
@@ -2371,7 +2377,7 @@ ${urls.join("\n")}
         });
       }
       res.json({ status: "success", recorded: true });
-    } catch(err) {
+    } catch (err) {
       res.status(500).json({ status: "error" });
     }
   });
@@ -2394,7 +2400,7 @@ ${urls.join("\n")}
 
   function getAIFallback(prompt: string, expectJson: boolean): string {
     const lower = prompt.toLowerCase();
-    
+
     if (lower.includes("unique student opportunities") || lower.includes("generic/popular student opportunities")) {
       return JSON.stringify([
         {
@@ -2432,7 +2438,7 @@ ${urls.join("\n")}
         }
       ]);
     }
-    
+
     if (lower.includes("cover letter") || lower.includes("apply draft")) {
       return `Subject: Expressing Interest in the Opportunity
 
@@ -2449,7 +2455,7 @@ Sincerely,
 
 *(Note: This is a static template provided because our AI service is currently experiencing high traffic. Please customize it before sending.)*`;
     }
-    
+
     if (lower.includes("scout protocol") || lower.includes("scout")) {
       return JSON.stringify({
         results: [
@@ -2475,7 +2481,7 @@ Sincerely,
         agent_note: "I have leveraged scout fallbacks to identify high-potential options matching your specific parameter constraints."
       });
     }
-    
+
     if (lower.includes("scholarship") || lower.includes("eligible")) {
       return JSON.stringify({
         eligible: true,
@@ -2485,7 +2491,7 @@ Sincerely,
         ]
       });
     }
-    
+
     if (lower.includes("mentor") || lower.includes("career advice") || lower.includes("messages")) {
       return JSON.stringify({
         text: "I am a standard career mentor fallback. Focus on building fully polished portfolio applications, writing high-quality README documents, and establishing deep mastery in TypeScript/Vite full-stack structures!\n\n*(Note: This response was provided by a local fallback system because our AI service is currently experiencing high traffic.)*"
@@ -2514,7 +2520,7 @@ Sincerely,
         const fb = getAIFallback(prompt, !!expectJson);
         return res.json({ text: fb });
       }
-      
+
       let responseText = "";
       try {
         const response = await ai.models.generateContent({
@@ -2579,7 +2585,7 @@ Sincerely,
 
       const ai = getGenAI();
       if (!ai) {
-         return res.json(defaultFallback);
+        return res.json(defaultFallback);
       }
 
       const prompt = `Review this student resume for structure, impact, and ATS readiness. 
@@ -2631,7 +2637,7 @@ Return JSON strictly in this format:
             if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
               parsed = JSON.parse(responseText.substring(firstBrace, lastBrace + 1));
             }
-          } catch (e2) {}
+          } catch (e2) { }
         }
       }
 
@@ -2765,7 +2771,7 @@ Return ONLY a JSON object strictly adhering to this schema:
             config: { responseMimeType: "application/json" }
           });
           responseText = response.text || "";
-        } catch (liteErr) {}
+        } catch (liteErr) { }
       }
 
       let parsed = defaultFallback;
@@ -2779,7 +2785,7 @@ Return ONLY a JSON object strictly adhering to this schema:
             if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
               parsed = JSON.parse(responseText.substring(firstBrace, lastBrace + 1));
             }
-          } catch (e2) {}
+          } catch (e2) { }
         }
       }
 
@@ -2891,7 +2897,7 @@ Return ONLY a JSON object strictly adhering to this schema:
             if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
               parsed = JSON.parse(responseText.substring(firstBrace, lastBrace + 1));
             }
-          } catch (e2) {}
+          } catch (e2) { }
         }
       }
 
@@ -2913,7 +2919,7 @@ Return ONLY a JSON object strictly adhering to this schema:
       const deadlineType = req.query.deadlineType as string;
       const startDateStr = req.query.startDate as string;
       const endDateStr = req.query.endDate as string;
-      
+
       if (!dbCommand || !dbQuery) return res.json({ results: [], meta: { total_found: 0 } });
       const andConditions: any[] = [];
 
@@ -3081,12 +3087,12 @@ Return ONLY a JSON object strictly adhering to this schema:
         delete d._id;
         return d;
       });
-      
+
       res.json({
         results: mapped.slice(0, 20),
         meta: { query: q, total_found: mapped.length }
       });
-    } catch(err) {
+    } catch (err) {
       console.error("Search endpoint error:", err);
       res.status(500).json({ error: "Internal Server Error" });
     }
@@ -3114,13 +3120,13 @@ Return ONLY a JSON object strictly adhering to this schema:
       if (!dbCommand || !dbQuery) {
         return res.status(404).json({ error: "Database offline" });
       }
-      
+
       const { ObjectId } = await import("mongodb");
       let query;
       try {
         if (typeof rawId !== 'string') throw new Error("Invalid id");
         query = { _id: new ObjectId(rawId) };
-      } catch(e) {
+      } catch (e) {
         query = { id: rawId };
       }
       const item = await dbQuery.collection("opportunities").findOne(query);
@@ -3140,12 +3146,12 @@ Return ONLY a JSON object strictly adhering to this schema:
     try {
       if (!dbCommand || !dbQuery) return res.status(503).json({ error: "Database not available" });
       const id = req.params.id;
-      
+
       const { ObjectId } = await import("mongodb");
       let queryId;
       try {
         queryId = new ObjectId(id);
-      } catch(e) {
+      } catch (e) {
         queryId = id;
       }
 
@@ -3163,7 +3169,7 @@ Return ONLY a JSON object strictly adhering to this schema:
         try {
           await redisClient.del(`opportunity:${id}`);
           await redisClient.del("/api/v1/opportunities/trending"); // also clear trending to prevent stale
-        } catch(err) {
+        } catch (err) {
           console.error("[Cache] Invalidation error:", err);
         }
       }
@@ -3204,7 +3210,7 @@ Return ONLY a JSON object strictly adhering to this schema:
       const formatted = items.map((item: any) => {
         const copy = { ...item, id: item._id?.toString() || item.id || "welcome" };
         delete copy._id;
-        
+
         // Human readable time description
         const elapsedMs = Date.now() - new Date(copy.createdAt).getTime();
         const elapsedMins = Math.floor(elapsedMs / 60000);
@@ -3292,162 +3298,162 @@ Return ONLY a JSON object strictly adhering to this schema:
       res.status(500).json({ error: "Internal Server Error" });
     }
   });
-/**
- * Application Assist Routes
- *
- * Handles:
- * - AI application draft generation
- * - Async application processing
- */
+  /**
+   * Application Assist Routes
+   *
+   * Handles:
+   * - AI application draft generation
+   * - Async application processing
+   */
 
 
-app.post(
-  "/api/v1/applications/generate-draft",
-  async (req, res) => {
+  app.post(
+    "/api/v1/applications/generate-draft",
+    async (req, res) => {
 
-    try {
+      try {
 
-      const {
-        opportunity,
-        profile
-      } = req.body;
+        const {
+          opportunity,
+          profile
+        } = req.body;
 
 
 
-      if (!opportunity?.title) {
+        if (!opportunity?.title) {
 
-        return res.status(400).json({
+          return res.status(400).json({
+            error:
+              "Opportunity details required"
+          });
+
+        }
+
+
+
+        const draft =
+          await generateApplicationDraft({
+
+            opportunityTitle:
+              opportunity.title,
+
+            organization:
+              opportunity.organization ||
+              opportunity.org,
+
+            profile
+
+          });
+
+
+
+        return res.json({
+
+          success: true,
+
+          content: draft
+
+        });
+
+
+
+      } catch (error) {
+
+
+        console.error(
+          "Application draft generation failed:",
+          error
+        );
+
+
+        return res.status(500).json({
+
           error:
-            "Opportunity details required"
+            "Failed to generate application draft"
+
         });
 
       }
 
+    }
+  );
 
 
-      const draft =
-        await generateApplicationDraft({
 
-          opportunityTitle:
-            opportunity.title,
+  /**
+   * Queue based application processing
+   */
 
-          organization:
-            opportunity.organization ||
-            opportunity.org,
+  app.post(
+    "/api/v1/applications/queue",
+    async (req, res) => {
 
-          profile
+      try {
+
+
+        const job =
+          await addApplicationJob({
+
+            userId:
+              req.body.userId,
+
+            opportunityId:
+              req.body.opportunityId,
+
+            opportunityTitle:
+              req.body.opportunityTitle,
+
+            organization:
+              req.body.organization,
+
+            profile:
+              req.body.profile,
+
+            action:
+              req.body.action ||
+              "generate_draft"
+
+          });
+
+
+
+        return res.json({
+
+          success: true,
+
+          jobId:
+            job.id
 
         });
 
 
-
-      return res.json({
-
-        success: true,
-
-        content: draft
-
-      });
+      } catch (error) {
 
 
-
-    } catch(error) {
-
-
-      console.error(
-        "Application draft generation failed:",
-        error
-      );
+        console.error(
+          "Application queue error:",
+          error
+        );
 
 
-      return res.status(500).json({
+        return res.status(500).json({
 
-        error:
-          "Failed to generate application draft"
-
-      });
-
-    }
-
-  }
-);
-
-
-
-/**
- * Queue based application processing
- */
-
-app.post(
-  "/api/v1/applications/queue",
-  async(req,res)=>{
-
-    try {
-
-
-      const job =
-        await addApplicationJob({
-
-          userId:
-            req.body.userId,
-
-          opportunityId:
-            req.body.opportunityId,
-
-          opportunityTitle:
-            req.body.opportunityTitle,
-
-          organization:
-            req.body.organization,
-
-          profile:
-            req.body.profile,
-
-          action:
-            req.body.action ||
-            "generate_draft"
+          error:
+            "Unable to queue application"
 
         });
 
-
-
-      return res.json({
-
-        success:true,
-
-        jobId:
-          job.id
-
-      });
-
-
-    } catch(error){
-
-
-      console.error(
-        "Application queue error:",
-        error
-      );
-
-
-      return res.status(500).json({
-
-        error:
-          "Unable to queue application"
-
-      });
+      }
 
     }
-
-  }
-);
+  );
   // Health check
   app.get("/api/v1/health", (req, res) => {
-    res.json({ 
-      status: "online", 
-      message: "Yuvahub Gateway Active", 
+    res.json({
+      status: "online",
+      message: "Yuvahub Gateway Active",
       backend: "proxying to nodejs",
-      time: new Date().toISOString() 
+      time: new Date().toISOString()
     });
   });
 
@@ -3455,7 +3461,7 @@ app.post(
   try {
     const { spawn } = await import("child_process");
     console.log("[System] Initializing centralized Node.js Background Scheduler...");
-    
+
     // Periodically run the Native scraping pipeline every 12 hours (43200000ms)
     setInterval(() => {
       console.log("[System] Triggering scheduled Node.js pipeline run...");
@@ -3463,11 +3469,11 @@ app.post(
         cwd: process.cwd(),
         env: { ...process.env }
       });
-      
+
       schedulerProc.stdout.on("data", (data) => {
         console.log(`[Node Scheduler Log]: ${data.toString().trim()}`);
       });
-      
+
       schedulerProc.stderr.on("data", (data) => {
         console.error(`[Node Scheduler Error]: ${data.toString().trim()}`);
       });
@@ -3480,7 +3486,7 @@ app.post(
         console.log(`[System] Scheduled Native Pipeline exited with code ${code}.`);
       });
     }, 43200000); // 12 hours
-    
+
     console.log("[System] Scheduled pipeline initialized to run natively every 12 hours.");
   } catch (err) {
     console.error("[System] Failed to initialize Node Background Scheduler:", err);
@@ -3515,10 +3521,10 @@ app.post(
       if (!dbCommand || !dbQuery) {
         return res.json([]);
       }
-      
+
       // Query the scraper_metrics populated by the Python Daemon!
       const metrics = await dbQuery.collection("scraper_metrics").find({}).toArray();
-      
+
       const mappings: Record<string, string> = {
         "devpost": "Devpost",
         "unstop": "Unstop",
@@ -3558,7 +3564,7 @@ app.post(
         { $group: { _id: "$source", items: { $sum: 1 } } }
       ];
       const stats = await dbQuery.collection("opportunities").aggregate(pipeline).toArray();
-      
+
       const adminScrapers = stats.map((stat: any) => ({
         name: mappings[stat._id] || stat._id || "Unknown Source",
         status: "healthy",
@@ -3587,7 +3593,7 @@ app.post(
           });
         }
       });
-      
+
       res.json(adminScrapers);
     } catch (err) {
       console.error("Admin scrapers fetch error:", err);
@@ -3811,13 +3817,13 @@ app.post(
     res.type("application/xml");
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
     xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
-    
+
     // Static Pages Configuration
     const hostname = "https://yuvahub.xyz";
     const staticPages = [
       { loc: "", changefreq: "daily", priority: "1.0" }
     ];
-    
+
     staticPages.forEach(p => {
       xml += '  <url>\n';
       xml += `    <loc>${hostname}/${p.loc}</loc>\n`;
@@ -3839,9 +3845,9 @@ app.post(
               .toLowerCase()
               .replace(/[^a-z0-9]+/g, "-")
               .replace(/^-+|-+$/g, "");
-            
+
             const oppUrl = `${hostname}/opportunity/${id}/${cleanTitle}`;
-            
+
             let dateStr = new Date().toISOString().split("T")[0];
             if (opp.updated_at) {
               dateStr = new Date(opp.updated_at).toISOString().split("T")[0];
@@ -3861,7 +3867,7 @@ app.post(
         console.error("[Sitemap] Error fetching dynamic opportunity links:", err);
       }
     }
-    
+
     xml += '</urlset>';
     res.send(xml);
   });
@@ -3881,7 +3887,7 @@ app.post(
           let query;
           try {
             query = { _id: new ObjectId(id) };
-          } catch(e) {
+          } catch (e) {
             query = { id: id };
           }
           const item = await dbQuery.collection("opportunities").findOne(query);
@@ -3894,16 +3900,16 @@ app.post(
             }
             md += `\n${item.description || "No description provided."}\n\n`;
             md += `[Apply Here](${item.applyLink || item.apply_link || ""})`;
-            
+
             res.set("Content-Type", "text/markdown");
-            res.set("x-markdown-tokens", "150"); 
+            res.set("x-markdown-tokens", "150");
             return res.send(md);
           }
-        } catch(e) {
+        } catch (e) {
           // Ignore and fallback to generic
         }
       }
-      
+
       const genericMd = `# YuvaHub\n\nYuvaHub is a discovery platform for hackathons, internships, scholarships, and open source programs tailored for students.\n\nExplore opportunities at https://yuvahub.xyz`;
       res.set("Content-Type", "text/markdown");
       res.set("x-markdown-tokens", "25");
@@ -3917,14 +3923,14 @@ app.post(
     const rawId = req.params.id;
     const id = (Array.isArray(rawId) ? rawId[0] : rawId) as string;
     let item: any = null;
-    
+
     if (dbCommand && dbQuery) {
       try {
         const { ObjectId } = await import("mongodb");
         let query;
         try {
           query = { _id: new ObjectId(id) };
-        } catch(e) {
+        } catch (e) {
           query = { id: id };
         }
         item = await dbQuery.collection("opportunities").findOne(query);
@@ -3963,9 +3969,9 @@ app.post(
       const categoryClean = (item.category || "").toLowerCase();
       const nowIso = new Date().toISOString();
       const deadlineStr = item.deadline || "";
-      
+
       // Attempt generic validThrough parsing
-      let validDate = new Date(Date.now() + 60*24*60*60*1000).toISOString();
+      let validDate = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
       try {
         if (deadlineStr && !/rolling|open|tbd/i.test(deadlineStr)) {
           const parsed = Date.parse(deadlineStr);
@@ -3973,7 +3979,7 @@ app.post(
             validDate = new Date(parsed).toISOString();
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       if (categoryClean.includes("job") || categoryClean.includes("internship")) {
         schemaJson = {
@@ -4033,7 +4039,7 @@ app.post(
         .replace(/<meta name="twitter:description"[\s\S]*?\/>/i, `<meta name="twitter:description" content="${desc}" />`)
         .replace(/<meta name="twitter:image"[\s\S]*?\/>/i, `<meta name="twitter:image" content="${img}" />`)
         .replace(/<meta property="og:type"[\s\S]*?\/>/i, `<meta property="og:type" content="article" /><meta property="og:url" content="${shareUrl}" />`);
-      
+
       // Inject standard clean canonical URL
       const canonicalTag = `<link rel="canonical" href="${shareUrl}" />`;
       indexHtml = indexHtml.replace("</head>", `  ${canonicalTag}\n</head>`);
@@ -4070,7 +4076,7 @@ app.post(
       const skip = (page - 1) * limit;
 
       const collection = dbQuery.collection("scholarships");
-      
+
       // Need skip() and limit() natively or via mock db fallback handling
       let items, total;
       if (collection.find({}).skip) { // Native mongodb
@@ -4101,7 +4107,7 @@ app.post(
       let queryId;
       try {
         queryId = new ObjectId(id);
-      } catch(e) {
+      } catch (e) {
         queryId = id; // Fallback for mock db
       }
       const item = await collection.findOne({ _id: queryId });
@@ -4121,15 +4127,15 @@ app.post(
       let queryId;
       try {
         queryId = new ObjectId(id);
-      } catch(e) {
+      } catch (e) {
         queryId = id;
       }
-      
+
       const result = await collection.updateOne(
         { _id: queryId },
         { $set: parsedData }
       );
-      
+
       res.json({ success: true, updated: true });
     } catch (err: any) {
       if (err instanceof z.ZodError) {
@@ -4147,7 +4153,7 @@ app.post(
       let queryId;
       try {
         queryId = new ObjectId(id);
-      } catch(e) {
+      } catch (e) {
         queryId = id;
       }
       let deleted = true;
@@ -4173,10 +4179,10 @@ app.post(
       let queryId;
       try {
         queryId = new ObjectId(scholarshipId);
-      } catch(e) {
+      } catch (e) {
         queryId = scholarshipId;
       }
-      
+
       const scholarship = await collection.findOne({ _id: queryId });
       if (!scholarship) return res.status(404).json({ error: "Scholarship not found" });
 
@@ -4224,7 +4230,7 @@ ${JSON.stringify(userProfile, null, 2)}
     } catch (err: any) {
       console.error("AI Validation Error:", err);
       if (err instanceof z.ZodError) {
-         return res.status(502).json({ error: "AI generated invalid schema", details: err.issues });
+        return res.status(502).json({ error: "AI generated invalid schema", details: err.issues });
       }
       res.status(500).json({ error: "Internal Server Error during validation" });
     }
@@ -4937,7 +4943,7 @@ ${JSON.stringify(userProfile, null, 2)}
   io.on("connection", (socket) => {
     console.log(`[Socket] Client connected: ${socket.id}`);
     socket.emit("connected", { status: "ready" });
-    
+
     socket.on("mock_interview_message", async (data) => {
       try {
         const { text, jobDescription, resumeContext, history } = data;
@@ -4951,12 +4957,12 @@ ${JSON.stringify(userProfile, null, 2)}
         if (resumeContext) prompt += `Resume: ${resumeContext}\n`;
         if (jobDescription) prompt += `Job Description: ${jobDescription}\n`;
         prompt += `\nKeep your responses concise, conversational, and suitable for text-to-speech. Ask ONE question at a time.\n`;
-        
+
         prompt += `\nPrevious context:\n`;
         if (history && history.length > 0) {
-           history.forEach((msg: any) => {
-             prompt += `${msg.role === 'user' ? 'Candidate' : 'Interviewer'}: ${msg.content}\n`;
-           });
+          history.forEach((msg: any) => {
+            prompt += `${msg.role === 'user' ? 'Candidate' : 'Interviewer'}: ${msg.content}\n`;
+          });
         }
         prompt += `\nCandidate: ${text}\nInterviewer:`;
 
@@ -4974,7 +4980,7 @@ ${JSON.stringify(userProfile, null, 2)}
             contents: prompt
           });
         }
-        
+
         const aiText = response.text || "I'm sorry, I didn't quite get that.";
         console.log(`[MockInterview] AI Response: ${aiText}`);
 
@@ -4990,23 +4996,23 @@ ${JSON.stringify(userProfile, null, 2)}
         const { userId, jobDescription, transcript, resumeContext } = data;
         let score = 70;
         let feedback = "Good effort, but could use more detail.";
-        
+
         const genAI = getGenAI();
         if (genAI) {
-           const prompt = `Review this mock interview transcript and provide a score out of 100, and a brief 2-sentence area of improvement.\nTranscript:\n${JSON.stringify(transcript)}\nFormat your response strictly as JSON: {"score": 85, "feedback": "..."}`;
-           try {
-             const result = await genAI.models.generateContent({
-               model: "gemini-3.5-flash",
-               contents: prompt
-             });
-             let resText = result.text || "";
-             resText = resText.replace(/```json/g, '').replace(/```/g, '').trim();
-             const parsed = JSON.parse(resText);
-             score = parsed.score || score;
-             feedback = parsed.feedback || feedback;
-           } catch(e) {
-             console.error("Failed to generate feedback", e);
-           }
+          const prompt = `Review this mock interview transcript and provide a score out of 100, and a brief 2-sentence area of improvement.\nTranscript:\n${JSON.stringify(transcript)}\nFormat your response strictly as JSON: {"score": 85, "feedback": "..."}`;
+          try {
+            const result = await genAI.models.generateContent({
+              model: "gemini-3.5-flash",
+              contents: prompt
+            });
+            let resText = result.text || "";
+            resText = resText.replace(/```json/g, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(resText);
+            score = parsed.score || score;
+            feedback = parsed.feedback || feedback;
+          } catch (e) {
+            console.error("Failed to generate feedback", e);
+          }
         }
 
         const session = {
@@ -5069,16 +5075,146 @@ ${JSON.stringify(userProfile, null, 2)}
     });
   }, 45000); // every 45s for demo
 
+  // Peer-to-Peer Mentorship Booking & Availability Scheduler API
+
+  // 1. Fetch mentor availability slots
+  app.get("/api/v1/mentors/availability", async (req, res) => {
+    try {
+      const mentorUid = (req.query.mentorUid as string) || "mentor_default";
+      if (dbQuery) {
+        const avail = await dbQuery.collection("mentor_availability").findOne({ mentorUid });
+        if (avail) {
+          return res.json(avail);
+        }
+      }
+
+      // Default curated availability fallback slots
+      res.json({
+        mentorUid,
+        timezone: "IST (UTC+5:30)",
+        maxSessionsPerWeek: 5,
+        availableSlots: [
+          { date: "2026-07-25", time: "10:00 AM" },
+          { date: "2026-07-25", time: "02:00 PM" },
+          { date: "2026-07-26", time: "05:00 PM" },
+          { date: "2026-07-27", time: "11:00 AM" },
+          { date: "2026-07-28", time: "04:00 PM" }
+        ]
+      });
+    } catch (err) {
+      console.error("[Mentorship] Availability GET error:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  // 2. Book 1-on-1 mentorship session with double-booking validation
+  app.post("/api/v1/mentorship/book", async (req, res) => {
+    try {
+      const { studentUid, mentorUid, mentorName, topic, slotDateTime, meetingUrl } = req.body;
+      if (!studentUid || !mentorUid || !slotDateTime) {
+        return res.status(400).json({ error: "Missing required booking details (studentUid, mentorUid, slotDateTime)" });
+      }
+
+      // Check double-booking slot validation
+      if (dbQuery) {
+        const existingSession = await dbQuery.collection("mentorship_sessions").findOne({
+          mentorUid,
+          slotDateTime,
+          status: { $in: ["Pending", "Confirmed"] }
+        });
+
+        if (existingSession) {
+          return res.status(409).json({ error: "This time slot is already booked. Please select another slot." });
+        }
+      }
+
+      const newSession = {
+        sessionId: "sess_" + Date.now(),
+        studentUid,
+        mentorUid,
+        mentorName: mentorName || "YuvaHub Industry Mentor",
+        topic: topic || "Career Strategy & Resume Review",
+        slotDateTime,
+        meetingUrl: meetingUrl || `https://meet.jit.si/yuvahub-mentorship-${Date.now()}`,
+        status: "Confirmed", // Auto-confirm valid slots
+        createdAt: new Date()
+      };
+
+      if (dbCommand) {
+        await dbCommand.collection("mentorship_sessions").insertOne(newSession);
+      }
+
+      res.status(201).json({ success: true, session: newSession });
+    } catch (err) {
+      console.error("[Mentorship] Booking POST error:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  // 3. Fetch session requests for student or mentor
+  app.get("/api/v1/mentorship/sessions", async (req, res) => {
+    try {
+      const uid = (req.query.uid as string) || "user_default";
+      if (dbQuery) {
+        const sessions = await dbQuery.collection("mentorship_sessions").find({
+          $or: [{ studentUid: uid }, { mentorUid: uid }]
+        }).sort({ createdAt: -1 }).toArray();
+
+        return res.json(sessions);
+      }
+
+      // Curated sample sessions fallback
+      res.json([
+        {
+          sessionId: "sess_demo_1",
+          studentUid: uid,
+          mentorUid: "m_sarah",
+          mentorName: "Sarah Jenkins (Senior SWE @ Google)",
+          topic: "GSoC Proposal & System Design Review",
+          slotDateTime: "2026-07-25 at 10:00 AM IST",
+          meetingUrl: "https://meet.jit.si/yuvahub-mentorship-gsoc",
+          status: "Confirmed",
+          createdAt: new Date().toISOString()
+        }
+      ]);
+    } catch (err) {
+      console.error("[Mentorship] Sessions GET error:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  // 4. Update session status (accept/decline/complete)
+  app.patch("/api/v1/mentorship/status", async (req, res) => {
+    try {
+      const { sessionId, status } = req.body;
+      if (!sessionId || !status) {
+        return res.status(400).json({ error: "Missing sessionId or status" });
+      }
+
+      if (dbCommand) {
+        await dbCommand.collection("mentorship_sessions").updateOne(
+          { sessionId },
+          { $set: { status, updatedAt: new Date() } }
+        );
+      }
+
+      res.json({ success: true, sessionId, status });
+    } catch (err) {
+      console.error("[Mentorship] Status PATCH error:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
-    
+
     // Auto-open browser in development mode
     if (process.env.NODE_ENV !== "production") {
       import("child_process").then(({ exec }) => {
         const url = `http://localhost:${PORT}`;
-        const cmd = process.platform === 'win32' ? `start ${url}` 
-                  : process.platform === 'darwin' ? `open ${url}` 
-                  : `xdg-open ${url}`;
+        const cmd = process.platform === 'win32' ? `start ${url}`
+          : process.platform === 'darwin' ? `open ${url}`
+            : `xdg-open ${url}`;
         exec(cmd);
       });
     }
@@ -5091,9 +5227,9 @@ async function bootstrap() {
       process.env.JWT_SECRET = "yuvahub_jwt_secret_dev_key_2026";
     }
     await startServer(); // startServer initializes db and starts express
-    
+
     await eventBus.connect();
-    
+
     // Setup DB Ingestion consumer (requires db)
     const dbConsumer = await createOpportunityScrapedConsumer(dbCommand);
     await eventBus.subscribe('dnl.opportunity.scraped.db', 'opportunity.scraped', dbConsumer);
