@@ -4431,6 +4431,96 @@ ${JSON.stringify(userProfile, null, 2)}
     console.log(`[Socket] Client connected: ${socket.id}`);
     socket.emit("connected", { status: "ready" });
     
+    socket.on("mock_interview_message", async (data) => {
+      try {
+        const { text, jobDescription, resumeContext, history } = data;
+        const genAI = getGenAI();
+        if (!genAI) {
+          socket.emit("mock_interview_response", { text: "Error: Gemini API not available. Cannot process interview." });
+          return;
+        }
+
+        let prompt = `You are a virtual technical interviewer. You are interviewing a candidate based on their resume and the target job description.\n\n`;
+        if (resumeContext) prompt += `Resume: ${resumeContext}\n`;
+        if (jobDescription) prompt += `Job Description: ${jobDescription}\n`;
+        prompt += `\nKeep your responses concise, conversational, and suitable for text-to-speech. Ask ONE question at a time.\n`;
+        
+        prompt += `\nPrevious context:\n`;
+        if (history && history.length > 0) {
+           history.forEach((msg: any) => {
+             prompt += `${msg.role === 'user' ? 'Candidate' : 'Interviewer'}: ${msg.content}\n`;
+           });
+        }
+        prompt += `\nCandidate: ${text}\nInterviewer:`;
+
+        console.log(`[MockInterview] Received message: ${text}`);
+        let response;
+        try {
+          response = await genAI.models.generateContent({
+            model: "gemini-3.5-flash",
+            contents: prompt
+          });
+        } catch (primaryErr: any) {
+          console.warn(`[MockInterview] Primary model failed, attempting fallback: ${primaryErr.message}`);
+          response = await genAI.models.generateContent({
+            model: "gemini-3.1-flash-lite",
+            contents: prompt
+          });
+        }
+        
+        const aiText = response.text || "I'm sorry, I didn't quite get that.";
+        console.log(`[MockInterview] AI Response: ${aiText}`);
+
+        socket.emit("mock_interview_response", { text: aiText });
+      } catch (err: any) {
+        console.error("Mock Interview Error:", err);
+        socket.emit("mock_interview_response", { text: `Error: ${err.message || 'Unknown error'}` });
+      }
+    });
+
+    socket.on("end_mock_interview", async (data) => {
+      try {
+        const { userId, jobDescription, transcript, resumeContext } = data;
+        let score = 70;
+        let feedback = "Good effort, but could use more detail.";
+        
+        const genAI = getGenAI();
+        if (genAI) {
+           const prompt = `Review this mock interview transcript and provide a score out of 100, and a brief 2-sentence area of improvement.\nTranscript:\n${JSON.stringify(transcript)}\nFormat your response strictly as JSON: {"score": 85, "feedback": "..."}`;
+           try {
+             const result = await genAI.models.generateContent({
+               model: "gemini-3.5-flash",
+               contents: prompt
+             });
+             let resText = result.text || "";
+             resText = resText.replace(/```json/g, '').replace(/```/g, '').trim();
+             const parsed = JSON.parse(resText);
+             score = parsed.score || score;
+             feedback = parsed.feedback || feedback;
+           } catch(e) {
+             console.error("Failed to generate feedback", e);
+           }
+        }
+
+        const session = {
+          userId: userId || "anonymous",
+          jobDescription,
+          resumeContext,
+          transcript,
+          score,
+          feedback,
+          createdAt: new Date()
+        };
+
+        if (dbCommand) {
+          await dbCommand.collection("mock_interviews").insertOne(session);
+        }
+        socket.emit("mock_interview_ended", { success: true, score, feedback });
+      } catch (err) {
+        console.error("End Mock Interview Error:", err);
+      }
+    });
+
     socket.on("disconnect", () => {
       console.log(`[Socket] Client disconnected: ${socket.id}`);
     });

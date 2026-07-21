@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { LayoutDashboard, Globe, PlusCircle, Users, User, Menu, X, Activity, Bookmark, Sparkles, MessageSquare, Settings, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Globe, PlusCircle, Users, User, Menu, X, Activity, Bookmark, Sparkles, MessageSquare, Settings, Sun, Moon, Mic } from 'lucide-react';
 import { signInWithGoogle, logout } from './lib/firebase';
 import { UserProfile } from './types';
 import { useAppContext } from './context/AppContext';
@@ -33,6 +33,7 @@ import AboutTab from './components/Tabs/About';
 import HelpCenterPage from './pages/HelpCenter';
 import GettingStartedDetail from './pages/GettingStartedDetail';
 import { SEO } from './components/SEO';
+import MockInterviewRoom from './pages/MockInterviewRoom';
 
 const PUBLIC_TABS = ['opportunities', 'about', 'privacy', 'terms', 'cookies', 'guidelines', 'security', 'support', 'legal'];
 
@@ -197,6 +198,7 @@ function App() {
     { id: 'community', label: 'Community', icon: MessageSquare },
     { id: 'profile', label: 'My Profile', icon: User },
     { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'mock_interview', label: 'Mock Interview', icon: Mic },
     ...(isAdminUser ? [{ id: 'admin', label: 'Admin', icon: Activity }] : []),
   ];
 
@@ -221,6 +223,7 @@ function App() {
       case 'support': return <Support />;
       case 'about': return <AboutTab />;
       case 'help': return gettingStartedStep ? <GettingStartedDetail stepId={gettingStartedStep as any} /> : <HelpCenterPage />;
+      case 'mock_interview': return <MockInterviewRoom />;
       default: return <Dashboard />;
     }
   };
