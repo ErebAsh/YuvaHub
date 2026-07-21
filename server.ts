@@ -18,8 +18,8 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { z } from "zod";
 import jwt from "jsonwebtoken";
 import { ScholarshipSchema, AIEvaluationResponseSchema } from "./src/models/scholarshipSchema.js";
-import { isToxic, createToxicityMiddleware } from "./src/services/toxicity.js";
-import { authenticateUser, deleteFirebaseUser } from "./src/middleware/auth.js";
+import { createToxicityMiddleware } from "./src/services/toxicity.js";
+import { authenticateUser, authorizeRoles, deleteFirebaseUser } from "./src/middleware/auth.js";
 import rateLimit, { MemoryStore } from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 import Redis from "ioredis";
@@ -707,7 +707,7 @@ async function startServer() {
     queues: [new BullMQAdapter(scraperQueue), new BullMQAdapter(resumeParserQueue)],
     serverAdapter: serverAdapter,
   });
-  app.use('/admin/queues', authenticateUser(dbCommand), authorizeRoles('admin'), serverAdapter.getRouter());
+  app.use('/admin/queues', authenticateUser(dbCommand), authorizeRoles(['admin']), serverAdapter.getRouter());
 
   // Suppress express-rate-limit warnings / errors for forwarded headers when behind proxy
   app.use((req, res, next) => {
@@ -753,7 +753,7 @@ async function startServer() {
     return res.status(200).json({ success: true, message: "Processed via REST backup" });
   });
 
-  app.post("/api/agent/apply", authenticateUser, async (req, res) => {
+  app.post("/api/agent/apply", authenticateUser(dbCommand), async (req, res) => {
     try {
       const { jobUrl } = req.body;
       const userId = (req as any).user?.uid;
@@ -1285,7 +1285,7 @@ ${urls.join("\n")}
   // --- Real API Routes ---
 
   const adminRouter = express.Router();
-  adminRouter.use(authenticateUser(dbCommand), authorizeRoles('admin', 'moderator'));
+  adminRouter.use(authenticateUser(dbCommand), authorizeRoles(['admin', 'moderator']));
 
   adminRouter.get('/scraper-stats', async (req, res) => {
     try {
@@ -1758,9 +1758,9 @@ ${urls.join("\n")}
   // --- Bookmarks API ---
 
   // Get user's bookmarks
-  app.get("/api/v1/bookmarks", async (req, res) => {
+  app.get("/api/v1/bookmarks", authenticateUser(dbCommand), async (req, res) => {
     try {
-      const user = await getAuthenticatedUser(req);
+      const user = req.user;
       if (!dbQuery) return res.status(503).json({ error: "Database not available" });
 
       const userDoc = await dbQuery.collection("users").findOne({ uid: user.uid });
@@ -1780,9 +1780,9 @@ ${urls.join("\n")}
   });
 
   // Submit an opportunity
-  app.post("/api/v1/opportunities", async (req, res) => {
+  app.post("/api/v1/opportunities", authenticateUser(dbCommand), async (req, res) => {
     try {
-      const user = await getAuthenticatedUser(req);
+      const user = req.user;
       if (!dbCommand) return res.status(503).json({ error: "Database not available" });
 
       const payload = req.body;
@@ -1823,9 +1823,9 @@ ${urls.join("\n")}
   });
 
   // Add a bookmark
-  app.post("/api/v1/bookmarks", async (req, res) => {
+  app.post("/api/v1/bookmarks", authenticateUser(dbCommand), async (req, res) => {
     try {
-      const user = await getAuthenticatedUser(req);
+      const user = req.user;
       if (!dbQuery) return res.status(503).json({ error: "Database not available" });
 
       const { opportunityId } = req.body;
@@ -1864,9 +1864,9 @@ ${urls.join("\n")}
   });
 
   // Delete a bookmark
-  app.delete("/api/v1/bookmarks/:opportunityId", async (req, res) => {
+  app.delete("/api/v1/bookmarks/:opportunityId", authenticateUser(dbCommand), async (req, res) => {
     try {
-      const user = await getAuthenticatedUser(req);
+      const user = req.user;
       if (!dbQuery) return res.status(503).json({ error: "Database not available" });
 
       const { opportunityId } = req.params;
@@ -1891,9 +1891,9 @@ ${urls.join("\n")}
   });
 
   // --- Karma API ---
-  app.get("/api/v1/karma/balance", async (req, res) => {
+  app.get("/api/v1/karma/balance", authenticateUser(dbCommand), async (req, res) => {
     try {
-      const user = await getAuthenticatedUser(req);
+      const user = req.user;
       if (!dbQuery) return res.status(503).json({ error: "Database not available" });
       const txs = await dbQuery.collection("transactions").find({ userId: user.uid }).toArray();
       let balance = txs.reduce((acc: number, tx: any) => acc + (tx.amount || 0), 0);
@@ -1916,9 +1916,9 @@ ${urls.join("\n")}
     }
   });
 
-  app.post("/api/v1/karma/award", async (req, res) => {
+  app.post("/api/v1/karma/award", authenticateUser(dbCommand), async (req, res) => {
     try {
-      const user = await getAuthenticatedUser(req);
+      const user = req.user;
       if (!dbCommand) return res.status(503).json({ error: "Database not available" });
       const { type, metadata } = req.body;
       let amount = 0;
@@ -1963,9 +1963,9 @@ ${urls.join("\n")}
     }
   });
 
-  app.post("/api/v1/bounties", async (req, res) => {
+  app.post("/api/v1/bounties", authenticateUser(dbCommand), async (req, res) => {
     try {
-      const user = await getAuthenticatedUser(req);
+      const user = req.user;
       if (!dbCommand) return res.status(503).json({ error: "Database not available" });
       const { title, description, tags, reward, posterName } = req.body;
 
@@ -1995,15 +1995,16 @@ ${urls.join("\n")}
     }
   });
 
-  app.post("/api/v1/bounties/:id/accept", async (req, res) => {
+  app.post("/api/v1/bounties/:id/accept", authenticateUser(dbCommand), async (req, res) => {
     try {
-      const user = await getAuthenticatedUser(req);
+      const user = req.user;
       if (!dbCommand) return res.status(503).json({ error: "Database not available" });
       const { ObjectId } = await import("mongodb");
       const { mentorName } = req.body;
 
+      const bountyId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
       const result = await dbCommand.collection("bounties").updateOne(
-        { _id: new ObjectId(req.params.id), status: 'open' },
+        { _id: new ObjectId(bountyId), status: 'open' },
         { $set: { status: 'accepted', mentorId: user.uid, mentorName, updatedAt: Date.now() } }
       );
       if (result.modifiedCount === 0) return res.status(400).json({ error: "Bounty not available" });
@@ -2013,18 +2014,19 @@ ${urls.join("\n")}
     }
   });
 
-  app.post("/api/v1/bounties/:id/resolve", async (req, res) => {
+  app.post("/api/v1/bounties/:id/resolve", authenticateUser(dbCommand), async (req, res) => {
     try {
-      const user = await getAuthenticatedUser(req);
+      const user = req.user;
       if (!dbCommand) return res.status(503).json({ error: "Database not available" });
       const { ObjectId } = await import("mongodb");
 
-      const bounty = await dbCommand.collection("bounties").findOne({ _id: new ObjectId(req.params.id) });
+      const bountyId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const bounty = await dbCommand.collection("bounties").findOne({ _id: new ObjectId(bountyId) });
       if (!bounty) return res.status(404).json({ error: "Not found" });
       if (bounty.posterId !== user.uid) return res.status(403).json({ error: "Only poster can resolve" });
 
       await dbCommand.collection("bounties").updateOne(
-        { _id: new ObjectId(req.params.id) },
+        { _id: new ObjectId(bountyId) },
         { $set: { status: 'resolved', updatedAt: Date.now() } }
       );
 
@@ -2033,7 +2035,7 @@ ${urls.join("\n")}
         amount: bounty.reward,
         type: 'bounty_reward',
         timestamp: Date.now(),
-        metadata: { bountyId: req.params.id }
+        metadata: { bountyId: bountyId }
       });
 
       res.json({ success: true });
@@ -2042,14 +2044,15 @@ ${urls.join("\n")}
     }
   });
 
-  app.post("/api/v1/bounties/:id/rate", async (req, res) => {
+  app.post("/api/v1/bounties/:id/rate", authenticateUser(dbCommand), async (req, res) => {
     try {
-      const user = await getAuthenticatedUser(req);
+      const user = req.user;
       if (!dbCommand) return res.status(503).json({ error: "Database not available" });
       const { ObjectId } = await import("mongodb");
       const { rating } = req.body;
 
-      const bounty = await dbCommand.collection("bounties").findOne({ _id: new ObjectId(req.params.id) });
+      const bountyId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const bounty = await dbCommand.collection("bounties").findOne({ _id: new ObjectId(bountyId) });
       if (!bounty) return res.status(404).json({ error: "Not found" });
       if (bounty.posterId !== user.uid) return res.status(403).json({ error: "Only poster can rate" });
 
@@ -2088,107 +2091,11 @@ ${urls.join("\n")}
     }
   });
 
-  async function getAuthenticatedUser(req: any) {
-    const authHeader = req.headers.authorization;
-    if (typeof authHeader !== 'string' || !authHeader.startsWith("Bearer ")) {
-      throw new Error("Unauthorized: Missing token");
-    }
 
-    const idToken = authHeader.substring(7);
-
-    // Fetch Firebase config to get API key
-    const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
-    let firebaseApiKey = "";
-    if (fs.existsSync(firebaseConfigPath)) {
-      try {
-        const config = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
-        firebaseApiKey = config.apiKey || "";
-      } catch (e) {
-        console.error("[Auth] Error parsing firebase-applet-config.json:", e);
-      }
-    }
-
-    let uid = "";
-    let email = "";
-    let role = "user";
-
-    // Try to verify as a standard JWT first (for our RBAC custom tokens)
-    try {
-      if (!process.env.JWT_SECRET) {
-        throw new Error("JWT_SECRET environment variable is required");
-      }
-      const decoded = jwt.verify(idToken, process.env.JWT_SECRET) as any;
-      uid = decoded.sub || decoded.user_id || decoded.uid;
-      email = decoded.email || "";
-      role = decoded.role || "user";
-      return { uid, email, role };
-    } catch (jwtErr) {
-      // If it fails, fall back to Firebase / Mock logic
-    }
-
-    if (firebaseApiKey) {
-      const verifyUrl = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${firebaseApiKey}`;
-      const verifyRes = await fetch(verifyUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken })
-      });
-
-      if (!verifyRes.ok) {
-        throw new Error("Unauthorized: Invalid token");
-      }
-
-      const data = await verifyRes.json();
-      if (!data.users || data.users.length === 0) {
-        throw new Error("Unauthorized: User not found");
-      }
-      uid = data.users[0].localId;
-      email = data.users[0].email || "";
-      role = email === "uditt490@gmail.com" ? "admin" : "user";
-    } else if (process.env.NODE_ENV === "development" && process.env.ENABLE_MOCK_AUTH === "true") {
-      try {
-        const parts = idToken.split(".");
-        if (parts.length === 3) {
-          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
-          uid = payload.user_id || payload.sub;
-          email = payload.email || "";
-          role = payload.role || (email === "uditt490@gmail.com" ? "admin" : "user");
-        }
-      } catch (e) {
-        throw new Error("Unauthorized: Invalid mock token format");
-      }
-
-      if (!uid) {
-        throw new Error("Unauthorized: Mock validation failed");
-      }
-    } else {
-      throw new Error("Authentication service not configured");
-    }
-
-    return { uid, email, role };
-  }
-
-  function authorizeRoles(...allowedRoles: string[]) {
-    return async (req: any, res: any, next: any) => {
-      try {
-        const user = await getAuthenticatedUser(req);
-        req.user = user;
-
-        if (!allowedRoles.includes(user.role)) {
-          console.warn(`[Circuit Breaker] Forbidden access attempt to ${req.originalUrl} from IP ${req.ip}. Role: ${user.role}`);
-          return res.status(403).json({ error: "Forbidden: Insufficient privileges." });
-        }
-        next();
-      } catch (err: any) {
-        console.warn(`[Circuit Breaker] Unauthorized access attempt to ${req.originalUrl} from IP ${req.ip}. Error: ${err.message}`);
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-    };
-  };
 
   const handleSignatureRequest = async (req: any, res: any) => {
     try {
-      const user = await getAuthenticatedUser(req);
+      const user = req.user;
       const { fileType, extension } = req.body;
 
       if (!fileType || !extension) {
@@ -2278,7 +2185,7 @@ ${urls.join("\n")}
 
   const handleSaveUpload = async (req: any, res: any) => {
     try {
-      const user = await getAuthenticatedUser(req);
+      const user = req.user;
       const { type, url, publicId } = req.body;
 
       if (!type || !url || !publicId) {
@@ -2333,10 +2240,10 @@ ${urls.join("\n")}
     }
   };
 
-  app.post("/api/storage/signature", handleSignatureRequest);
-  app.post("/api/v1/storage/signature", handleSignatureRequest);
-  app.post("/api/storage/save", handleSaveUpload);
-  app.post("/api/v1/storage/save", handleSaveUpload);
+  app.post("/api/storage/signature", authenticateUser(dbCommand), handleSignatureRequest);
+  app.post("/api/v1/storage/signature", authenticateUser(dbCommand), handleSignatureRequest);
+  app.post("/api/storage/save", authenticateUser(dbCommand), handleSaveUpload);
+  app.post("/api/v1/storage/save", authenticateUser(dbCommand), handleSaveUpload);
 
   const localUpload = multer({
     storage: multer.diskStorage({
@@ -3142,10 +3049,11 @@ Return ONLY a JSON object strictly adhering to this schema:
     }
   });
 
-  app.put("/api/v1/opportunity/:id", authorizeRoles("admin", "moderator"), async (req, res) => {
+  app.put("/api/v1/opportunity/:id", authenticateUser(dbCommand), authorizeRoles(["admin", "moderator"]), async (req, res) => {
     try {
       if (!dbCommand || !dbQuery) return res.status(503).json({ error: "Database not available" });
-      const id = req.params.id;
+      const rawId = req.params.id;
+      const id = Array.isArray(rawId) ? rawId[0] : rawId;
 
       const { ObjectId } = await import("mongodb");
       let queryId;
@@ -3186,9 +3094,9 @@ Return ONLY a JSON object strictly adhering to this schema:
   // Notifications API (Remaining in Node for SSE stability)
   const clients: any[] = [];
 
-  app.get("/api/v1/notifications", async (req, res) => {
+  app.get("/api/v1/notifications", authenticateUser(dbCommand), async (req, res) => {
     try {
-      const user = await getAuthenticatedUser(req);
+      const user = req.user;
       if (!dbQuery) return res.status(503).json({ error: "Database not available" });
 
       const collection = dbQuery.collection("notifications");
@@ -3241,10 +3149,11 @@ Return ONLY a JSON object strictly adhering to this schema:
     }
   });
 
-  app.post("/api/v1/notifications/:id/read", async (req, res) => {
+  app.post("/api/v1/notifications/:id/read", authenticateUser(dbCommand), async (req, res) => {
     try {
-      const user = await getAuthenticatedUser(req);
-      const { id } = req.params;
+      const user = req.user;
+      const rawNotifId = req.params.id;
+      const id = Array.isArray(rawNotifId) ? rawNotifId[0] : rawNotifId;
       if (!dbCommand) return res.status(503).json({ error: "Database not available" });
 
       const collection = dbCommand.collection("notifications");
@@ -3272,9 +3181,9 @@ Return ONLY a JSON object strictly adhering to this schema:
     }
   });
 
-  app.post("/api/v1/notifications/read-all", async (req, res) => {
+  app.post("/api/v1/notifications/read-all", authenticateUser(dbCommand), async (req, res) => {
     try {
-      const user = await getAuthenticatedUser(req);
+      const user = req.user;
       if (!dbCommand) return res.status(503).json({ error: "Database not available" });
 
       const collection = dbCommand.collection("notifications");
@@ -3493,7 +3402,7 @@ Return ONLY a JSON object strictly adhering to this schema:
   }
 
   // --- Admin Routes ---
-  app.get("/api/v1/admin/health", authorizeRoles('admin', 'moderator'), (req, res) => {
+  app.get("/api/v1/admin/health", authorizeRoles(['admin', 'moderator']), (req, res) => {
     res.json({
       status: "healthy",
       database: dbQuery ? "connected" : "disconnected",
@@ -3503,7 +3412,7 @@ Return ONLY a JSON object strictly adhering to this schema:
     });
   });
 
-  app.get("/api/v1/admin/metrics", authorizeRoles('admin', 'moderator'), async (req, res) => {
+  app.get("/api/v1/admin/metrics", authorizeRoles(['admin', 'moderator']), async (req, res) => {
     let opportunitiesAdded = 0;
     if (dbCommand && dbQuery) {
       opportunitiesAdded = await dbQuery.collection("opportunities").countDocuments();
@@ -3516,7 +3425,7 @@ Return ONLY a JSON object strictly adhering to this schema:
     });
   });
 
-  app.get("/api/v1/admin/scrapers", authorizeRoles('admin', 'moderator'), async (req, res) => {
+  app.get("/api/v1/admin/scrapers", authorizeRoles(['admin', 'moderator']), async (req, res) => {
     try {
       if (!dbCommand || !dbQuery) {
         return res.json([]);
@@ -3730,13 +3639,11 @@ Return ONLY a JSON object strictly adhering to this schema:
     }
   });
 
-  app.get("/api/v1/admin/incidents", authorizeRoles('admin', 'moderator'), (req, res) => {
-    res.json([
-      { id: 1, type: "WARNING", component: "Python Gateway", message: "Python service dropped. Ported to Node.js native.", time: "10 mins ago" }
-    ]);
+  app.get("/api/v1/admin/incidents", authorizeRoles(['admin', 'moderator']), (req, res) => {
+    res.json([]);
   });
 
-  app.delete("/api/v1/admin/users/:id", authorizeRoles('admin', 'moderator'), async (req, res) => {
+  app.delete("/api/v1/admin/users/:id", authorizeRoles(['admin', 'moderator']), async (req, res) => {
     try {
       if (!dbCommand || !dbQuery) {
         return res.status(503).json({ error: "Database unavailable" });
@@ -3750,7 +3657,7 @@ Return ONLY a JSON object strictly adhering to this schema:
     }
   });
 
-  app.get("/api/v1/admin/stream/telemetry", authorizeRoles('admin', 'moderator'), (req, res) => {
+  app.get("/api/v1/admin/stream/telemetry", authorizeRoles(['admin', 'moderator']), (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -4053,7 +3960,7 @@ Return ONLY a JSON object strictly adhering to this schema:
   });
 
   // --- Scholarship Hub API Routes ---
-  app.post("/api/scholarships", authorizeRoles("admin"), async (req, res) => {
+  app.post("/api/scholarships", authorizeRoles(["admin"]), async (req, res) => {
     try {
       if (!dbCommand || !dbQuery) return res.status(503).json({ error: "Database not available" });
       const parsedData = ScholarshipSchema.parse(req.body);
@@ -4118,10 +4025,11 @@ Return ONLY a JSON object strictly adhering to this schema:
     }
   });
 
-  app.put("/api/scholarships/:id", authorizeRoles("admin"), async (req, res) => {
+  app.put("/api/scholarships/:id", authorizeRoles(["admin"]), async (req, res) => {
     try {
       if (!dbCommand || !dbQuery) return res.status(503).json({ error: "Database not available" });
-      const id = req.params.id;
+      const rawId = req.params.id;
+      const id = Array.isArray(rawId) ? rawId[0] : rawId;
       const parsedData = ScholarshipSchema.parse({ ...req.body, updated_at: new Date() });
       const collection = dbQuery.collection("scholarships");
       let queryId;
@@ -4145,10 +4053,11 @@ Return ONLY a JSON object strictly adhering to this schema:
     }
   });
 
-  app.delete("/api/scholarships/:id", authorizeRoles("admin"), async (req, res) => {
+  app.delete("/api/scholarships/:id", authorizeRoles(["admin"]), async (req, res) => {
     try {
       if (!dbCommand || !dbQuery) return res.status(503).json({ error: "Database not available" });
-      const id = req.params.id;
+      const rawId = req.params.id;
+      const id = Array.isArray(rawId) ? rawId[0] : rawId;
       const collection = dbQuery.collection("scholarships");
       let queryId;
       try {
@@ -4316,10 +4225,11 @@ ${JSON.stringify(userProfile, null, 2)}
   });
 
   // 2. Create a Post (with Profanity Filter)
-  app.post(["/api/v1/posts", "/api/posts"], async (req, res) => {
+  app.post(["/api/v1/posts", "/api/posts"], authenticateUser(dbCommand), async (req, res) => {
     try {
       const { title, content, author, type, tags, uid } = req.body;
-      if (!content || !author) {
+      const userUid = req.user?.uid || uid || "user_anon";
+      if (!content || (!author && !req.user?.name)) {
         return res.status(400).json({ error: "Missing post content or author name" });
       }
 
@@ -4331,8 +4241,8 @@ ${JSON.stringify(userProfile, null, 2)}
       const post = {
         title: title || "Community Discussion",
         content,
-        author,
-        authorUid: uid || "user_anon",
+        author: author || req.user?.name || req.user?.email || "Anonymous",
+        authorUid: userUid,
         type: type || "Update",
         tags: Array.isArray(tags) ? tags : ["General"],
         upvotes: 0,
@@ -4355,7 +4265,7 @@ ${JSON.stringify(userProfile, null, 2)}
   });
 
   // Delete a Post
-  app.delete(["/api/v1/posts/:postId", "/api/posts/:postId"], async (req, res) => {
+  app.delete(["/api/v1/posts/:postId", "/api/posts/:postId"], authenticateUser(dbCommand), async (req, res) => {
     try {
       const { postId } = req.params;
       const idStr = Array.isArray(postId) ? postId[0] : postId;
@@ -4400,7 +4310,7 @@ ${JSON.stringify(userProfile, null, 2)}
   });
 
   // 3. Create a Comment or Reply (Materialized Path, Toxicity classification)
-  app.post(["/api/v1/posts/:postId/comments", "/api/posts/:postId/comments"], toxicityMiddleware, async (req, res) => {
+  app.post(["/api/v1/posts/:postId/comments", "/api/posts/:postId/comments"], authenticateUser(dbCommand), toxicityMiddleware, async (req, res) => {
     try {
       const { postId } = req.params;
       const { content, author, parentId } = req.body;
@@ -4451,7 +4361,7 @@ ${JSON.stringify(userProfile, null, 2)}
   });
 
   // 4. Edit a Comment (Toxicity classification)
-  app.patch("/api/v1/posts/:postId/comments/:commentId", toxicityMiddleware, async (req, res) => {
+  app.patch("/api/v1/posts/:postId/comments/:commentId", authenticateUser(dbCommand), toxicityMiddleware, async (req, res) => {
     try {
       const { postId, commentId } = req.params;
       const { content } = req.body;
@@ -4525,11 +4435,11 @@ ${JSON.stringify(userProfile, null, 2)}
   });
 
   // 6. Upvote a Post (Transactional and atomic)
-  app.post(["/api/v1/posts/:postId/upvote", "/api/posts/:postId/upvote"], authorizeRoles("user", "admin", "moderator"), async (req, res) => {
+  app.post(["/api/v1/posts/:postId/upvote", "/api/posts/:postId/upvote"], authenticateUser(dbCommand), async (req, res) => {
     try {
       const { postId } = req.params;
       const idStr = Array.isArray(postId) ? postId[0] : postId;
-      const userId = req.user.uid;
+      const userId = req.user?.uid;
 
       if (!userId) {
         return res.status(400).json({ error: "Missing userId" });
@@ -4847,7 +4757,7 @@ ${JSON.stringify(userProfile, null, 2)}
   });
 
   // 2. Create Custom Bookmark Folder
-  app.post(["/api/v1/user/bookmark-folders", "/api/user/bookmark-folders"], async (req, res) => {
+  app.post(["/api/v1/user/bookmark-folders", "/api/user/bookmark-folders"], authenticateUser(dbCommand), async (req, res) => {
     try {
       const { name, color, uid } = req.body;
       if (!name) {
@@ -4856,7 +4766,7 @@ ${JSON.stringify(userProfile, null, 2)}
 
       const folderDoc = {
         folderId: "f_" + Date.now(),
-        uid: uid || "user_default",
+        uid: req.user?.uid || uid || "user_default",
         name: name.trim(),
         color: color || "blue",
         opportunityIds: [] as string[],
@@ -4875,7 +4785,7 @@ ${JSON.stringify(userProfile, null, 2)}
   });
 
   // 3. Delete Custom Bookmark Folder
-  app.delete(["/api/v1/user/bookmark-folders/:folderId", "/api/user/bookmark-folders/:folderId"], async (req, res) => {
+  app.delete(["/api/v1/user/bookmark-folders/:folderId", "/api/user/bookmark-folders/:folderId"], authenticateUser(dbCommand), async (req, res) => {
     try {
       const { folderId } = req.params;
       const idStr = Array.isArray(folderId) ? folderId[0] : folderId;
@@ -4892,9 +4802,10 @@ ${JSON.stringify(userProfile, null, 2)}
   });
 
   // 4. Organize Bookmark into Folder / Assign Custom Tags
-  app.post(["/api/v1/user/bookmarks/organize", "/api/user/bookmarks/organize"], async (req, res) => {
+  app.post(["/api/v1/user/bookmarks/organize", "/api/user/bookmarks/organize"], authenticateUser(dbCommand), async (req, res) => {
     try {
       const { opportunityId, folderId, tags, uid } = req.body;
+      const userUid = req.user?.uid || uid || "user_default";
       if (!opportunityId) {
         return res.status(400).json({ error: "opportunityId is required" });
       }
@@ -4902,7 +4813,7 @@ ${JSON.stringify(userProfile, null, 2)}
       if (dbCommand && folderId) {
         // Remove from other folders for this user
         await dbCommand.collection("bookmark_folders").updateMany(
-          { uid: uid || "user_default" },
+          { uid: userUid },
           { $pull: { opportunityIds: opportunityId } as any }
         );
         // Add to selected folder
@@ -5108,9 +5019,10 @@ ${JSON.stringify(userProfile, null, 2)}
   });
 
   // 2. Book 1-on-1 mentorship session with double-booking validation
-  app.post("/api/v1/mentorship/book", async (req, res) => {
+  app.post("/api/v1/mentorship/book", authenticateUser(dbCommand), async (req, res) => {
     try {
-      const { studentUid, mentorUid, mentorName, topic, slotDateTime, meetingUrl } = req.body;
+      const { mentorUid, mentorName, topic, slotDateTime, meetingUrl } = req.body;
+      const studentUid = req.user?.uid || req.body.studentUid;
       if (!studentUid || !mentorUid || !slotDateTime) {
         return res.status(400).json({ error: "Missing required booking details (studentUid, mentorUid, slotDateTime)" });
       }
@@ -5184,7 +5096,7 @@ ${JSON.stringify(userProfile, null, 2)}
   });
 
   // 4. Update session status (accept/decline/complete)
-  app.patch("/api/v1/mentorship/status", async (req, res) => {
+  app.patch("/api/v1/mentorship/status", authenticateUser(dbCommand), async (req, res) => {
     try {
       const { sessionId, status } = req.body;
       if (!sessionId || !status) {
@@ -5202,6 +5114,14 @@ ${JSON.stringify(userProfile, null, 2)}
     } catch (err) {
       console.error("[Mentorship] Status PATCH error:", err);
       res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  // Centralized Error Handling Middleware
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error(`[Unhandled Error] ${req.method} ${req.url}:`, err);
+    if (!res.headersSent) {
+      res.status(err.status || 500).json({ error: err.message || "Internal Server Error" });
     }
   });
 
