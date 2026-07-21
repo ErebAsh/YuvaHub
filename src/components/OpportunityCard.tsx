@@ -19,6 +19,10 @@ export interface Opportunity {
     eligibility?: string; // Student | Graduate | etc
     verified?: boolean;
     registeredCount?: number;
+    isStale?: boolean;
+    isFallback?: boolean;
+    source_name?: string;
+    sourceName?: string;
 }
 
 interface OpportunityCardProps {
@@ -46,7 +50,7 @@ export function OpportunityCard({
     onToggleBookmark,
     isBookmarked = false,
 }: OpportunityCardProps) {
-    const orgName = opp.org || opp.organization || "Company not specified";
+    const orgName = opp.source_name || opp.sourceName || opp.org || opp.organization || "Company not specified";
     const title = opp.title || "Untitled opportunity";
     const deadlineLabel = opp.isRolling ? "Rolling" : opp.deadline || "TBA";
     const locationLabel = opp.location || "Location TBA";
@@ -88,7 +92,9 @@ export function OpportunityCard({
                 <div className="absolute left-3 right-3 top-3 flex items-start justify-between gap-2">
                     <div className="flex max-w-[78%] flex-wrap items-center gap-1.5">
                         <TypeBadge type={opp.type} />
-                        {opp.verified !== false && <Badge variant="verified">Verified</Badge>}
+                        {opp.verified !== false && !opp.isFallback && !opp.isStale && <Badge variant="verified">Verified</Badge>}
+                        {opp.isFallback && <Badge variant="neutral" className="bg-orange-50 text-orange-700 border-orange-200">System Fallback</Badge>}
+                        {opp.isStale && <Badge variant="neutral" className="bg-yellow-50 text-yellow-700 border-yellow-200">Outdated Data</Badge>}
                     </div>
 
                     <button

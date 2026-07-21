@@ -198,14 +198,13 @@ export async function fetchSmartFeed(profile: any, cursor?: string) {
         console.warn("Gemini supplement failed, resolving to local static fallbacks", geminiError);
       }
 
-      // Statically supplement if Gemini failed or is disabled
-      if (!geminiSuccess || !data.items || data.items.length < 3) {
+      // Only fallback to static items if DB returned absolutely nothing
+      const cleanDbItems = (data.items || []).filter((item: any) => item.id !== "sys_nodeDbMissing");
+      if (cleanDbItems.length === 0) {
         const staticItems = getFilteredFallbacks(profile, 6);
-        const cleanDbItems = (data.items || []).filter((item: any) => item.id !== "sys_nodeDbMissing");
-        data.items = [
-          ...cleanDbItems,
-          ...staticItems.map((item: any) => ({ ...item, isFallback: true }))
-        ];
+        data.items = staticItems.map((item: any) => ({ ...item, isFallback: true }));
+      } else {
+        data.items = cleanDbItems;
       }
     }
 
@@ -331,12 +330,12 @@ export async function fetchExploreFeed(cursor?: string, limit: number = 20) {
         console.warn("Gemini explore supplement failed", e);
       }
 
-      if (!geminiSuccess || !data.items || data.items.length < 3) {
+      const cleanDbItems = (data.items || []).filter((item: any) => item.id !== "sys_nodeDbMissing");
+      if (cleanDbItems.length === 0) {
         const staticItems = getFilteredFallbacks({}, 6);
-        data.items = [
-          ...(data.items || []).filter((item: any) => item.id !== "sys_nodeDbMissing"),
-          ...staticItems.map((item: any) => ({ ...item, isFallback: true }))
-        ];
+        data.items = staticItems.map((item: any) => ({ ...item, isFallback: true }));
+      } else {
+        data.items = cleanDbItems;
       }
     }
 
@@ -437,11 +436,14 @@ export async function searchOpportunities(
            console.warn("Gemini scout supplement failed, resorting to static matchers", e);
         }
 
-        if (!geminiSuccess || !data.results || data.results.length === 0) {
+        const cleanDbItems = (data.results || []).filter((item: any) => item.id !== "sys_nodeDbMissing");
+        if (cleanDbItems.length === 0) {
            const localMatches = getFilteredFallbacks({ field: type }, 6, query);
            data.results = localMatches.map((item: any) => ({ ...item, isFallback: true }));
            data.isFallback = true;
-         }
+        } else {
+           data.results = cleanDbItems;
+        }
     }
     
     if (data.results && data.results.length > 0) saveToCache(cacheKey, data);

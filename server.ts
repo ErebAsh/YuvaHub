@@ -246,6 +246,7 @@ async function getRankedOpportunities(database: any, profile: any, page: number,
         return {
           ...opp,
           id: idStr,
+          is_stale: hoursSinceCreation > 72,
           metrics: {
             totalScore: Math.round(totalScore),
             relevance: profileRelevanceScore,
@@ -326,9 +327,10 @@ async function getRankedOpportunities(database: any, profile: any, page: number,
 
       return {
         ...opp,
+        is_stale: hoursSinceCreation > 72,
         metrics: {
           totalScore: Math.round(totalScore),
-          relevance: 0, // Meilisearch handles the textual relevance inherently
+          relevance: opp.metrics?.relevance || 0,
           freshness: Math.round(freshnessScore),
           interactionRatio: stats.total
         }
