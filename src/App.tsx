@@ -24,6 +24,7 @@ import Security from './components/Tabs/Security';
 import Legal from './components/Tabs/Legal';
 import Support from './components/Tabs/Support';
 import HelpCenter from './components/Tabs/HelpCenter';
+import FAQ from './components/Tabs/FAQ';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import Cookies from './pages/Cookies';
@@ -106,6 +107,8 @@ const getSeoPropsForTab = (tab: string) => {
       return { title: "Admin Dashboard | YuvaHub", description: "YuvaHub administrative operations control panel." };
     case 'ai_assistant':
       return { title: "AI Assistant | YuvaHub", description: "Interact with our intelligent career assistant for optimization and guidance." };
+    case 'faq':
+      return { title: "Help Center & FAQ | YuvaHub", description: "Find answers to common questions, troubleshoot issues, and learn how to use YuvaHub effectively." };
     default:
       return {
         title: "YuvaHub | Find Student Hackathons, Scholarships & Mentorships",
@@ -224,6 +227,7 @@ function App() {
       case 'about': return <AboutTab />;
       case 'help': return gettingStartedStep ? <GettingStartedDetail stepId={gettingStartedStep as any} /> : <HelpCenterPage />;
       case 'mock_interview': return <MockInterviewRoom />;
+      case 'faq': return <FAQ />;
       default: return <Dashboard />;
     }
   };
