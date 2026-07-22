@@ -1,9 +1,25 @@
 import { Meilisearch } from 'meilisearch';
 import { Db, ChangeStreamInsertDocument, ChangeStreamUpdateDocument, ChangeStreamReplaceDocument, ChangeStreamDeleteDocument } from 'mongodb';
 
+// --- SEC-245 FIX: Remove hardcoded default master key & validate startup ---
+const host = process.env.MEILI_HOST || 'http://localhost:7700';
+const apiKey = process.env.MEILI_MASTER_KEY;
+
+if (!apiKey) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'FATAL CONFIGURATION ERROR: MEILI_MASTER_KEY environment variable is missing in production.'
+    );
+  } else {
+    console.warn(
+      '⚠️ [SearchSync] WARNING: MEILI_MASTER_KEY is not defined. Meilisearch client initialized without an admin key (Development Mode).'
+    );
+  }
+}
+
 export const meiliClient = new Meilisearch({
-  host: process.env.MEILI_HOST || 'http://localhost:7700',
-  apiKey: process.env.MEILI_MASTER_KEY || 'yuvahub-dev-master-key'
+  host,
+  apiKey: apiKey || '',
 });
 
 export async function initializeSearchSync(db: Db) {
