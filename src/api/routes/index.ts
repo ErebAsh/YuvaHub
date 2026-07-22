@@ -17,7 +17,6 @@ import teamRoutes from "./teamRoutes.js";
 import scholarshipRoutes from "./scholarshipRoutes.js";
 import mentorshipRoutes from "./mentorshipRoutes.js";
 import bookmarkFolderRoutes from "./bookmarkFolderRoutes.js";
-import analyticsRoutes from "./analyticsRoutes.js";
 
 const rootRouter = Router();
 const v1Router = Router();
@@ -41,8 +40,7 @@ const routes = [
   teamRoutes,
   scholarshipRoutes,
   mentorshipRoutes,
-  bookmarkFolderRoutes,
-  analyticsRoutes
+  bookmarkFolderRoutes
 ];
 
 // Mount all routes onto v1Router

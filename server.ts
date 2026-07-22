@@ -12,7 +12,6 @@ import { dbCommand } from "./src/api/db.js";
 
 // Import Main API Router
 import apiRoutes from "./src/api/routes/index.js";
-import { analyticsBuffer } from "./src/api/analytics.js";
 import * as Sentry from "@sentry/node";
 
 dotenv.config();
@@ -49,35 +48,6 @@ import { errorHandler } from "./src/middlewares/errorHandler.js";
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
-
-// ── Graceful Shutdown ─────────────────────────────────────────────────
-let isShuttingDown = false;
-
-async function gracefulShutdown(signal: string) {
-  if (isShuttingDown) return;
-  isShuttingDown = true;
-  console.log(`[Core] Received ${signal}. Starting graceful shutdown...`);
-
-  // 1. Stop accepting new HTTP connections
-  server.close(() => {
-    console.log("[Core] HTTP server closed.");
-  });
-
-  // 2. Drain analytics buffer (safe — drainAndStop sets isShuttingDown flag,
-  //    rejects new pushes, flushes remaining, then stops the interval)
-  try {
-    await analyticsBuffer.drainAndStop();
-    console.log("[Core] Analytics buffer drained successfully.");
-  } catch (err) {
-    console.error("[Core] Error draining analytics buffer:", err);
-  }
-
-  // 3. Exit
-  process.exit(0);
-}
-
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 
 async function bootstrap() {
   try {
