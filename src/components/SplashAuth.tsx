@@ -3,6 +3,7 @@ import { Sparkles, Globe, BrainCircuit, Search, Zap, Code, Lightbulb, Trophy, Ta
 import { signInWithGoogle, signInWithGithub } from '../lib/firebase';
 import { useAppContext } from '../context/AppContext';
 import HelpCenter from './Tabs/HelpCenter';
+import FAQ from './Tabs/FAQ';
 import Security from './Tabs/Security';
 import Legal from './Tabs/Legal';
 import Support from './Tabs/Support';
@@ -320,17 +321,17 @@ export default function SplashAuth() {
                 })}
              </div>
 
-             <div className="mt-10 text-center">
-                <button
-                   onClick={() => {
-                      setActiveTab('help');
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                   }}
-                   className="inline-flex items-center gap-2 text-primary-blue font-bold text-sm hover:underline cursor-pointer bg-transparent border-none"
-                >
-                   View All FAQs <ArrowRight className="w-4 h-4" />
-                </button>
-             </div>
+              <div className="mt-10 text-center">
+                 <button
+                    onClick={() => {
+                       setActiveTab('faq');
+                       window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="inline-flex items-center gap-2 text-primary-blue font-bold text-sm hover:underline cursor-pointer bg-transparent border-none"
+                 >
+                    View All FAQs <ArrowRight className="w-4 h-4" />
+                 </button>
+              </div>
           </section>
         </>
       ) : (
@@ -347,6 +348,7 @@ export default function SplashAuth() {
             </button>
           </div>
           {activeTab === 'help' && <HelpCenter />}
+          {activeTab === 'faq' && <FAQ />}
           {activeTab === 'security' && <Security />}
           {activeTab === 'legal' && <Legal />}
           {activeTab === 'support' && <Support />}
@@ -368,20 +370,32 @@ export default function SplashAuth() {
                </p>
             </div>
             
-            <div className="flex flex-col gap-[9px]">
+            <div className="flex flex-col gap-[9px] items-start">
                <h4 className="font-bold text-text-primary mb-2">Competitions</h4>
-               <a href="#" className="text-[13px] text-text-secondary hover:text-primary-blue transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">Hackathons</a>
-               <a href="#" className="text-[13px] text-text-secondary hover:text-primary-blue transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">Quizzes</a>
-               <a href="#" className="text-[13px] text-text-secondary hover:text-primary-blue transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">Hiring Challenges</a>
-               <a href="#" className="text-[13px] text-text-secondary hover:text-primary-blue transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">Case Studies</a>
+               {['Hackathons', 'Quizzes', 'Hiring Challenges', 'Case Studies'].map((item) => (
+                  <button
+                     key={item}
+                     type="button"
+                     onClick={handleLogin}
+                     className="text-[13px] text-text-secondary hover:text-primary-blue transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded text-left bg-transparent border-none p-0 cursor-pointer"
+                  >
+                     {item}
+                  </button>
+               ))}
             </div>
 
-            <div className="flex flex-col gap-[9px]">
+            <div className="flex flex-col gap-[9px] items-start">
                <h4 className="font-bold text-text-primary mb-2">Opportunities</h4>
-               <a href="#" className="text-[13px] text-text-secondary hover:text-primary-blue transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">Internships</a>
-               <a href="#" className="text-[13px] text-text-secondary hover:text-primary-blue transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">Full Time Jobs</a>
-               <a href="#" className="text-[13px] text-text-secondary hover:text-primary-blue transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">Scholarships</a>
-               <a href="#" className="text-[13px] text-text-secondary hover:text-primary-blue transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">Fellowships</a>
+               {['Internships', 'Full Time Jobs', 'Scholarships', 'Fellowships'].map((item) => (
+                  <button
+                     key={item}
+                     type="button"
+                     onClick={handleLogin}
+                     className="text-[13px] text-text-secondary hover:text-primary-blue transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded text-left bg-transparent border-none p-0 cursor-pointer"
+                  >
+                     {item}
+                  </button>
+               ))}
             </div>
 
             <div>
@@ -408,6 +422,7 @@ export default function SplashAuth() {
                <button onClick={() => setActiveTab('guidelines')} className="text-[13px] text-text-secondary hover:text-text-primary bg-transparent border-none cursor-pointer p-0 font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">Guidelines</button>
                <button onClick={() => setActiveTab('security')} className="text-[13px] text-text-secondary hover:text-text-primary bg-transparent border-none cursor-pointer p-0 font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">Security</button>
                <button onClick={() => setActiveTab('help')} className="text-[13px] text-text-secondary hover:text-text-primary bg-transparent border-none cursor-pointer p-0 font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">Help Center</button>
+               <button onClick={() => setActiveTab('faq')} className="text-[13px] text-text-secondary hover:text-text-primary bg-transparent border-none cursor-pointer p-0 font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">FAQ</button>
                <button onClick={() => setActiveTab('support')} className="text-[13px] text-text-secondary hover:text-text-primary bg-transparent border-none cursor-pointer p-0 font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded">Support & Feedback</button>
             </div>
          </div>

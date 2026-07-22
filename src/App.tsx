@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { LayoutDashboard, Globe, PlusCircle, Users, User, Menu, X, Activity, Bookmark, Sparkles, MessageSquare, Settings, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Globe, PlusCircle, Users, User, Menu, X, Activity, Bookmark, Sparkles, MessageSquare, Settings, Sun, Moon, Mic } from 'lucide-react';
 import { signInWithGoogle, logout } from './lib/firebase';
 import { UserProfile } from './types';
 import { useAppContext } from './context/AppContext';
@@ -18,12 +18,14 @@ import AdminDashboard from './components/Admin/AdminDashboard';
 import NotificationDropdown from './components/ui/NotificationDropdown';
 import OpportunityDetail from './components/Tabs/OpportunityDetail';
 import AIAssistant from './components/Tabs/AIAssistant';
+import BountyBoard from './components/Tabs/BountyBoard';
 import BackToTopButton from './components/ui/BackToTopButton';import OnboardingFlow from './components/OnboardingFlow';
 import SplashAuth from './components/SplashAuth';
 import Security from './components/Tabs/Security';
 import Legal from './components/Tabs/Legal';
 import Support from './components/Tabs/Support';
 import HelpCenter from './components/Tabs/HelpCenter';
+import FAQ from './components/Tabs/FAQ';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import Cookies from './pages/Cookies';
@@ -33,6 +35,8 @@ import AboutTab from './components/Tabs/About';
 import HelpCenterPage from './pages/HelpCenter';
 import GettingStartedDetail from './pages/GettingStartedDetail';
 import { SEO } from './components/SEO';
+import Teams from './components/Tabs/Teams';
+import MockInterviewRoom from './pages/MockInterviewRoom';
 
 const PUBLIC_TABS = ['opportunities', 'about', 'privacy', 'terms', 'cookies', 'guidelines', 'security', 'support', 'legal'];
 
@@ -43,6 +47,8 @@ const getSeoPropsForTab = (tab: string) => {
         title: "YuvaHub | Find Student Hackathons, Scholarships & Mentorships",
         description: "Discovery platform for Indian students. Find hackathons, scholarships, and mentorship opportunities to boost your career. Real-time updates and AI matching."
       };
+    case 'teams':
+      return { title: "Team Builder & Matcher | YuvaHub", description: "Find teammates and join teams for hackathons, projects, and opportunities." };
     case 'opportunities':
       return {
         title: "Explore Opportunities | Internships, Jobs & Hackathons | YuvaHub",
@@ -105,6 +111,8 @@ const getSeoPropsForTab = (tab: string) => {
       return { title: "Admin Dashboard | YuvaHub", description: "YuvaHub administrative operations control panel." };
     case 'ai_assistant':
       return { title: "AI Assistant | YuvaHub", description: "Interact with our intelligent career assistant for optimization and guidance." };
+    case 'faq':
+      return { title: "Help Center & FAQ | YuvaHub", description: "Find answers to common questions, troubleshoot issues, and learn how to use YuvaHub effectively." };
     default:
       return {
         title: "YuvaHub | Find Student Hackathons, Scholarships & Mentorships",
@@ -132,7 +140,9 @@ function App() {
     theme,
     toggleTheme,
     gettingStartedStep,
-    setGettingStartedStep
+    setGettingStartedStep,
+    karmaBalance,
+    karmaBumpFlag
   } = useAppContext();
 
   const { isConnected, transportMode } = useSocket();
@@ -190,13 +200,16 @@ function App() {
   const TABS = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'opportunities', label: 'Opportunities', icon: Globe },
+    { id: 'teams', label: 'Team Builder', icon: Users },
     { id: 'bookmarks', label: 'Bookmarks', icon: Bookmark },
     { id: 'ai_assistant', label: 'AI Assistant', icon: Sparkles },
     { id: 'submit', label: 'Submit Opportunity', icon: PlusCircle },
     { id: 'mentorship', label: 'Mentorship', icon: Users },
+    { id: 'bounty_board', label: 'Bounty Board', icon: Sparkles },
     { id: 'community', label: 'Community', icon: MessageSquare },
     { id: 'profile', label: 'My Profile', icon: User },
     { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'mock_interview', label: 'Mock Interview', icon: Mic },
     ...(isAdminUser ? [{ id: 'admin', label: 'Admin', icon: Activity }] : []),
   ];
 
@@ -204,10 +217,12 @@ function App() {
     switch (activeTab) {
       case 'dashboard': return <Dashboard />;
       case 'opportunities': return <Opportunities />;
+      case 'teams': return <Teams />;
       case 'bookmarks': return <Bookmarks />;
       case 'ai_assistant': return <AIAssistant />;
       case 'submit': return <SubmitOpportunity />;
       case 'mentorship': return <Mentorship />;
+      case 'bounty_board': return <BountyBoard />;
       case 'community': return <Community />;
       case 'profile': return <Profile />;
       case 'settings': return <SettingsTab />;
@@ -221,6 +236,8 @@ function App() {
       case 'support': return <Support />;
       case 'about': return <AboutTab />;
       case 'help': return gettingStartedStep ? <GettingStartedDetail stepId={gettingStartedStep as any} /> : <HelpCenterPage />;
+      case 'mock_interview': return <MockInterviewRoom />;
+      case 'faq': return <FAQ />;
       default: return <Dashboard />;
     }
   };
@@ -464,6 +481,11 @@ function App() {
               )}
            </div>
            <div className="flex items-center gap-5">
+              {user && (
+                <div className={`hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full font-bold text-sm bg-yellow-50 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-500 ${karmaBumpFlag ? 'animate-karma-bounce' : ''}`}>
+                  💠 {karmaBalance} Karma
+                </div>
+              )}
               <div className="hidden md:flex items-center gap-2 text-xs font-medium bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700">
                 <span className={`w-2 h-2 rounded-full ${isConnected ? (transportMode === 'websocket' ? 'bg-green-500' : 'bg-yellow-500') : 'bg-red-500'}`}></span>
                 <span className="text-gray-600 dark:text-gray-300">

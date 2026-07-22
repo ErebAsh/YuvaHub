@@ -44,6 +44,13 @@ interface AppContextType {
   toggleTheme: () => void;
   gettingStartedStep: string | null;
   setGettingStartedStep: (step: string | null) => void;
+
+  // Gamified Bounty System (Karma)
+  karmaBalance: number;
+  setKarmaBalance: React.Dispatch<React.SetStateAction<number>>;
+  refreshKarma: () => Promise<void>;
+  karmaBumpFlag: number;
+  triggerKarmaAnimation: () => void;
 }
 
 // ─── Context creation ─────────────────────────────────────────────────────────
@@ -92,6 +99,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   
   const [gettingStartedStep, setGettingStartedStep] = useState<string | null>(null);
+
+  // Gamified Bounty System
+  const [karmaBalance, setKarmaBalance] = useState(0);
+  const [karmaBumpFlag, setKarmaBumpFlag] = useState(0);
+
+  const triggerKarmaAnimation = useCallback(() => {
+    setKarmaBumpFlag(prev => prev + 1);
+  }, []);
+
+  const refreshKarma = useCallback(async () => {
+    if (!auth.currentUser) return;
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch('/api/v1/karma/balance', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setKarmaBalance(prev => {
+           if (prev !== data.balance) triggerKarmaAnimation();
+           return data.balance;
+        });
+      }
+    } catch(e) {
+      console.error('[Karma] Failed to fetch balance', e);
+    }
+  }, [triggerKarmaAnimation]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -273,6 +307,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setProfile(data.profile as UserProfile);
               // Seed the bookmarks slice from the synced profile
               setBookmarkedIds(data.profile.bookmarks ?? []);
+              // Fetch karma
+              refreshKarma();
             } else {
               throw new Error('No profile returned from sync endpoint');
             }
@@ -436,7 +472,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       theme,
       toggleTheme,
       gettingStartedStep,
-      setGettingStartedStep
+      setGettingStartedStep,
+      karmaBalance,
+      setKarmaBalance,
+      refreshKarma,
+      karmaBumpFlag,
+      triggerKarmaAnimation
     }}>
       {children}
     </AppContext.Provider>

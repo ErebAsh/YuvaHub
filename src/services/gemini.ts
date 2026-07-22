@@ -89,6 +89,20 @@ export async function checkScholarshipEligibility(scholarship: any, profile: any
   return robustParseJSON(text) || { eligible: false, reasons: ["Could not verify."] };
 }
 
+export async function extractResumeData(resumeText: string) {
+  const prompt = `Extract structured data from the following resume text. Return JSON ONLY with this schema:
+  {
+    "education": [{"degree": "...", "institution": "...", "dates": "...", "gpa": "..."}],
+    "workExperience": [{"company": "...", "role": "...", "dates": "...", "impact": "..."}],
+    "rawSkills": ["skill1", "skill2"]
+  }
+  
+  Resume Text:
+  ${resumeText}`;
+  const text = await generatedContentProxy(prompt, true);
+  return robustParseJSON(text) || { education: [], workExperience: [], rawSkills: [] };
+}
+
 export async function chatWithMentor(messages: {role: string, content: string}[], message: string) {
   const prompt = `You are an AI Career Mentor for a student. Context of chat:\n${JSON.stringify([...messages, {role: 'user', content: message}])}\nRespond to the latest message. Be concise, encouraging, and provide actionable advice.`;
   const result = await generatedContentProxy(prompt);

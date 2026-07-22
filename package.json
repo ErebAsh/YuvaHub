@@ -12,17 +12,8 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "scrape": "tsx scrape-cli.ts",
-    "test-mongo": "tsx tests/test-mongo.ts",
-    "test-pdf": "tsx tests/test-pdf-export.ts",
-    "test-dnl": "tsx src/services/dnl/validationTest.ts",
-    "test-cqrs": "tsx tests/test-cqrs.ts",
-    "test-scraper": "tsx tests/test-scraper.ts",
-    "test-semantic-search": "tsx tests/test-semantic-search.ts",
-    "test-auth": "tsx tests/test-jit-auth.ts",
-    "test-socket": "tsx tests/test-socket-fallback.ts",
-    "test-eventbus": "tsx tests/test-eventbus.ts",
-    "test-admin-alerts": "tsx tests/test-admin-alerts.ts",
-    "test-cache-keys": "tsx tests/test-cache-keys.ts"
+    "test": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@bull-board/api": "^8.1.2",
@@ -59,10 +50,13 @@
     "multer": "^2.2.0",
     "nodemailer": "^9.0.3",
     "opossum": "^10.0.0",
+    "pdf-parse": "^2.4.5",
+    "playwright": "^1.61.1",
     "rate-limit-redis": "^5.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
+    "recharts": "^3.10.0",
     "redis": "^6.1.0",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
@@ -76,11 +70,14 @@
     "@types/node": "^22.14.0",
     "@types/nodemailer": "^8.0.1",
     "@types/opossum": "^8.1.9",
+    "@types/pdf-parse": "^1.1.5",
+    "@vitest/coverage-v8": "^4.1.10",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.28.0",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "vite-plugin-singlefile": "^2.3.3"
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^4.1.10"
   }
 }

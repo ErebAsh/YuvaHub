@@ -5,6 +5,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { UserProfile } from '../../types';
 import { ErrorState } from '../ui/states';
 import { useAppContext } from '../../context/AppContext';
+import ResumeVersionManager from './ResumeVersionManager';
 
 export default function Profile() {
   const { user, profile, setProfile } = useAppContext();
@@ -331,32 +332,11 @@ export default function Profile() {
                 <input type="url" placeholder="Portfolio URL" className="clean-input p-3 md:col-span-2" value={formData.portfolioUrl} onChange={e => setFormData({...formData, portfolioUrl: e.target.value})} />
               </div>
               
+              <div className="pt-4 border-t border-gray-100">
+                <ResumeVersionManager />
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-700 block">Resume (PDF, PNG, JPEG)</label>
-                  <div className="flex items-center gap-3">
-                    <label className="cursor-pointer text-sm font-semibold bg-gray-50 hover:bg-gray-100 text-gray-700 px-4 py-3 rounded-lg border border-gray-300 transition-colors flex-1 text-center">
-                      {formData.resumeUrl ? "Change Resume" : "Upload Resume"}
-                      <input 
-                        type="file" 
-                        accept=".pdf, image/png, image/jpeg" 
-                        className="hidden" 
-                        onChange={(e) => handleFileUpload(e, 'resume')} 
-                      />
-                    </label>
-                    {uploadingType === 'resume' && <span className="text-xs text-gray-500 animate-pulse">Uploading...</span>}
-                  </div>
-                  {formData.resumeUrl && (
-                    <a 
-                      href={formData.resumeUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-1"
-                    >
-                      View Uploaded Resume <ExternalLink className="w-3.5 h-3.5 inline-block ml-0.5" />
-                    </a>
-                  )}
-                </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-gray-700 block">Cover Letter (PDF, PNG, JPEG)</label>

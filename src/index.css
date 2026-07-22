@@ -138,3 +138,12 @@
 @utility clean-input {
   @apply bg-white border border-[var(--color-border)] text-gray-900 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent outline-none transition-all;
 }
+
+@keyframes karma-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-3px) scale(1.1); }
+}
+
+.animate-karma-bounce {
+  animation: karma-bounce 0.4s ease-out;
+}
