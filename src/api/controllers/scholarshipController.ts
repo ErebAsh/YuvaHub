@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { dbCommand, dbQuery } from "../db.js";
 import { ObjectId } from "mongodb";
 import { z } from "zod";
@@ -6,18 +6,15 @@ import { getGenAI } from "../genai.js";
 import { ScholarshipSchema, AIEvaluationResponseSchema } from "../../models/scholarshipSchema.js";
 import { Type } from "@google/genai";
 
-export const createScholarship = async (req: Request, res: Response) => {
+export const createScholarship = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!dbCommand || !dbQuery) return res.status(503).json({ error: "Database not available" });
-    const parsedData = ScholarshipSchema.parse(req.body);
+    if (!dbCommand || !dbQuery) return res.status(503).json({ success: false, error: "Database not available" });
+    const parsedData = req.body;
     const collection = dbQuery.collection("scholarships");
     const result = await collection.insertOne(parsedData);
-    res.status(201).json({ id: result.insertedId, ...parsedData });
+    res.status(201).json({ success: true, id: result.insertedId, ...parsedData });
   } catch (err: any) {
-    if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: "Validation failed", details: err.issues });
-    }
-    res.status(500).json({ error: "Internal Server Error" });
+    next(err);
   }
 };
 
@@ -61,12 +58,12 @@ export const getScholarshipById = async (req: Request, res: Response) => {
   }
 };
 
-export const updateScholarship = async (req: Request, res: Response) => {
+export const updateScholarship = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!dbCommand || !dbQuery) return res.status(503).json({ error: "Database not available" });
+    if (!dbCommand || !dbQuery) return res.status(503).json({ success: false, error: "Database not available" });
     const rawId = req.params.id;
     const id = Array.isArray(rawId) ? rawId[0] : rawId;
-    const parsedData = ScholarshipSchema.parse({ ...req.body, updated_at: new Date() });
+    const parsedData = { ...req.body, updated_at: new Date() };
     const collection = dbQuery.collection("scholarships");
     let queryId;
     try { queryId = new ObjectId(id); } catch (e) { queryId = id; }
@@ -74,10 +71,7 @@ export const updateScholarship = async (req: Request, res: Response) => {
     await collection.updateOne({ _id: queryId }, { $set: parsedData });
     res.json({ success: true, updated: true });
   } catch (err: any) {
-    if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: "Validation failed", details: err.issues });
-    }
-    res.status(500).json({ error: "Internal Server Error" });
+    next(err);
   }
 };
 

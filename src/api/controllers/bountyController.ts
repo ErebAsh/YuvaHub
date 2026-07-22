@@ -1,18 +1,18 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { dbCommand, dbQuery } from "../db.js";
 import { ObjectId } from "mongodb";
 
-export const getBounties = async (req: Request, res: Response) => {
+export const getBounties = async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!dbQuery) return res.status(503).json({ error: "Database not available" });
     const bounties = await dbQuery.collection("bounties").find({ status: { $in: ['open', 'accepted'] } }).sort({ createdAt: -1 }).limit(100).toArray();
     res.json({ items: bounties.map((b: any) => ({ ...b, id: b._id.toString() })) });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
-export const createBounty = async (req: Request, res: Response) => {
+export const createBounty = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user;
     if (!dbCommand) return res.status(503).json({ error: "Database not available" });
@@ -40,11 +40,11 @@ export const createBounty = async (req: Request, res: Response) => {
     const result = await dbCommand.collection("bounties").insertOne(bounty);
     res.json({ success: true, bounty: { ...bounty, id: result.insertedId.toString() } });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
-export const acceptBounty = async (req: Request, res: Response) => {
+export const acceptBounty = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user;
     if (!dbCommand) return res.status(503).json({ error: "Database not available" });
@@ -58,11 +58,11 @@ export const acceptBounty = async (req: Request, res: Response) => {
     if (result.modifiedCount === 0) return res.status(400).json({ error: "Bounty not available" });
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
-export const resolveBounty = async (req: Request, res: Response) => {
+export const resolveBounty = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user;
     if (!dbCommand) return res.status(503).json({ error: "Database not available" });
@@ -87,11 +87,11 @@ export const resolveBounty = async (req: Request, res: Response) => {
 
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
-export const rateBounty = async (req: Request, res: Response) => {
+export const rateBounty = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user;
     if (!dbCommand) return res.status(503).json({ error: "Database not available" });
@@ -110,11 +110,11 @@ export const rateBounty = async (req: Request, res: Response) => {
 
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
 
-export const getLeaderboard = async (req: Request, res: Response) => {
+export const getLeaderboard = async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!dbQuery) return res.status(503).json({ error: "Database not available" });
     const topUsers = await dbQuery.collection("users")
@@ -133,6 +133,6 @@ export const getLeaderboard = async (req: Request, res: Response) => {
       }))
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 };
