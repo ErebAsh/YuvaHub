@@ -39,8 +39,14 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { scraperQueue } from './src/queues/scraperQueue.js';
 import { resumeParserQueue } from './src/queues/resumeQueue.js';
 import { generateOpportunityEmbedding } from "./src/services/embedding.js";
+import * as Sentry from "@sentry/node";
 
 dotenv.config();
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN_NODE,
+  tracesSampleRate: 1.0,
+});
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -5368,6 +5374,13 @@ ${JSON.stringify(userProfile, null, 2)}
       res.status(500).json({ error: "Internal Server Error" });
     }
   });
+  // Test route for Sentry backend integration
+  app.get("/api/sentry-test-error", (req: express.Request, res: express.Response) => {
+    throw new Error("Backend Sentry Test Error");
+  });
+
+  // Setup Sentry express error handler before custom error handler
+  Sentry.setupExpressErrorHandler(app);
 
   // Centralized Error Handling Middleware
   app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

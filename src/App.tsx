@@ -481,6 +481,7 @@ function App() {
               )}
            </div>
            <div className="flex items-center gap-5">
+              <button onClick={() => { throw new Error("Frontend Sentry Test Error"); }} className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200 transition-colors">Test Error</button>
               {user && (
                 <div className={`hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full font-bold text-sm bg-yellow-50 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-500 ${karmaBumpFlag ? 'animate-karma-bounce' : ''}`}>
                   💠 {karmaBalance} Karma
