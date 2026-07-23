@@ -21,6 +21,7 @@ import OnboardingFlow from './components/OnboardingFlow';
 import SplashAuth from './components/SplashAuth';
 import Security from './components/Tabs/Security';
 import AuthSecurityCenter from './components/Tabs/AuthSecurityCenter';
+import CareerMatchStudio from './components/Tabs/CareerMatchStudio';
 import Legal from './components/Tabs/Legal';
 import Privacy from './components/Tabs/Privacy';
 import Terms from './components/Tabs/Terms';
@@ -91,6 +92,7 @@ function App() {
     { id: 'opportunities', label: 'Opportunities', icon: Globe },
     { id: 'bookmarks', label: 'Bookmarks', icon: Bookmark },
     { id: 'ai_assistant', label: 'AI Assistant', icon: Sparkles },
+    { id: 'career_match', label: 'Career Match Studio', icon: Activity },
     { id: 'submit', label: 'Submit Opportunity', icon: PlusCircle },
     { id: 'mentorship', label: 'Mentorship', icon: Users },
     { id: 'community', label: 'Community', icon: MessageSquare },
@@ -106,6 +108,7 @@ function App() {
       case 'opportunities': return <Opportunities />;
       case 'bookmarks': return <Bookmarks />;
       case 'ai_assistant': return <AIAssistant />;
+      case 'career_match': return <CareerMatchStudio />;
       case 'submit': return <SubmitOpportunity />;
       case 'mentorship': return <Mentorship />;
       case 'community': return <Community />;
